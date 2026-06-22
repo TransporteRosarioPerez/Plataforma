@@ -1,0 +1,49 @@
+---
+description: Git y SSH del proyecto Transporte Rosario Perez (Plataforma)
+alwaysApply: true
+---
+
+# Git — Transporte Rosario Perez / Plataforma
+
+Este repo **siempre** usa la identidad y SSH de la org `TransporteRosarioPerez`, no la cuenta personal.
+
+## Remote
+
+```
+origin → git@github-transporte:TransporteRosarioPerez/Plataforma.git
+```
+
+## SSH (`~/.ssh/config`)
+
+```
+Host github-transporte
+  HostName github.com
+  User git
+  IdentityFile ~/.ssh/id_ed25519_transporte
+  IdentitiesOnly yes
+```
+
+Verificar: `ssh -T git@github-transporte` → `Hi TransporteRosarioPerez!`
+
+## Identidad Git (solo este repo)
+
+Configurado en `.git/config` local — **no** usar `nahuelr.developer@gmail.com` aquí (Vercel bloquea deploys si el email del commit no coincide con la cuenta Git vinculada).
+
+```
+user.name  = Transporte Rosario Perez
+user.email = 198125215+TransporteRosarioPerez@users.noreply.github.com
+core.sshCommand = ssh -i ~/.ssh/id_ed25519_transporte -o IdentitiesOnly=yes
+```
+
+## Commits y push
+
+- Hacer commits solo con la identidad local del repo (no depender del `--global`).
+- Push: `git push origin main` (usa SSH `github-transporte` vía remote + `core.sshCommand`).
+- Si Vercel rechaza por email: `git commit --amend --reset-author --no-edit` y push.
+
+## Vercel
+
+- Proyecto: `plataforma` en team `transporte-rosario-perezs-projects`
+- URL prod: `https://plataforma-mauve.vercel.app`
+- Login de la app: `/app/login` (no `/login`)
+- Framework en Vercel debe ser **Next.js**, no "Other" (si Output Directory apunta a `public/`, todo da 404)
