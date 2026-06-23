@@ -6,20 +6,30 @@ import { useRouter } from 'next/navigation'
 import { Download, Loader2, Route, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import { FormSheet } from '@/components/ui/form-sheet'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { updateProforma } from '@/lib/actions/proformas'
 import { generateProformaDownloadUrl, generateProformaUploadUrl } from '@/lib/actions/proforma-file'
-import type { Proforma, Trip } from '@/lib/types'
+import type { Invoice, Proforma, Trip } from '@/lib/types'
 import type { ActionState } from '@/lib/validations/parse-form'
 import { toast } from 'sonner'
 
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
+
+const statusLabels: Record<Proforma['status'], string> = {
+  pendiente: 'Pendiente',
+  facturada: 'Facturada',
+  cobrada: 'Cobrada',
+}
+
+const statusColors: Record<Proforma['status'], string> = {
+  pendiente: 'bg-orange-500/10 text-orange-700 border-orange-500/30',
+  facturada: 'bg-blue-500/10 text-blue-700 border-blue-500/30',
+  cobrada: 'bg-green-500/10 text-green-700 border-green-500/30',
+}
 
 const initialState: ActionState = {}
 
@@ -27,6 +37,7 @@ type EditProformaSheetProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   proforma: Proforma | null
+  invoice: Invoice | null
   trips: Trip[]
   onRequestDelete: (proforma: Proforma) => void
 }
@@ -35,18 +46,14 @@ export function EditProformaSheet({
   open,
   onOpenChange,
   proforma,
+  invoice,
   trips,
   onRequestDelete,
 }: EditProformaSheetProps) {
   const router = useRouter()
-  const [editStatus, setEditStatus] = useState<Proforma['status']>('pendiente')
   const [pdfUploading, setPdfUploading] = useState(false)
   const [pdfDownloading, setPdfDownloading] = useState(false)
   const [updateState, updateAction, updatePending] = useActionState(updateProforma, initialState)
-
-  useEffect(() => {
-    if (proforma) setEditStatus(proforma.status)
-  }, [proforma])
 
   useEffect(() => {
     if (updateState.success) {
@@ -97,9 +104,6 @@ export function EditProformaSheet({
       formData.set('id', proforma.id)
       formData.set('proforma_number', proforma.proformaNumber)
       formData.set('subtotal', String(proforma.subtotal))
-      formData.set('taxes', String(proforma.taxes))
-      formData.set('total', String(proforma.total))
-      formData.set('status', editStatus)
       formData.set('received_date', proforma.receivedDate.toISOString().slice(0, 10))
       if (proforma.notes) formData.set('notes', proforma.notes)
       formData.set('file_url', upload.storageKey)
@@ -123,7 +127,7 @@ export function EditProformaSheet({
       onOpenChange={onOpenChange}
       size="wide"
       title="Editar proforma"
-      description={proforma ? `${proforma.clientName} · ${formatCurrency(proforma.total)}` : undefined}
+      description={proforma ? `${proforma.clientName} · Neto ${formatCurrency(proforma.subtotal)}` : undefined}
       footer={
         proforma ? (
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
@@ -131,6 +135,7 @@ export function EditProformaSheet({
               type="button"
               variant="destructive"
               className="sm:mr-auto"
+              disabled={proforma.status !== 'pendiente'}
               onClick={() => {
                 onOpenChange(false)
                 onRequestDelete(proforma)
@@ -182,19 +187,32 @@ export function EditProformaSheet({
             </Field>
             <Field>
               <FieldLabel>Estado</FieldLabel>
-              <Select value={editStatus} onValueChange={(v) => setEditStatus(v as Proforma['status'])}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pendiente">Pendiente</SelectItem>
-                  <SelectItem value="facturada">Facturada</SelectItem>
-                  <SelectItem value="cobrada">Cobrada (marca viajes como pagados)</SelectItem>
-                </SelectContent>
-              </Select>
-              <input type="hidden" name="status" value={editStatus} />
+              <div className="flex h-9 items-center">
+                <Badge variant="outline" className={statusColors[proforma.status]}>
+                  {statusLabels[proforma.status]}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {proforma.status === 'pendiente' && 'Creá la factura en el módulo Facturas.'}
+                {proforma.status === 'facturada' && 'Marcá la factura como cobrada en Facturas.'}
+                {proforma.status === 'cobrada' && 'Cobrada vía factura — viajes en Pagado.'}
+              </p>
             </Field>
           </div>
+
+          {invoice && (
+            <div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-1 text-sm">
+              <p className="font-medium">Factura vinculada</p>
+              <p>
+                <Link href="/app/facturas" className="font-mono underline">
+                  {invoice.invoiceNumber}
+                </Link>
+                {' · '}
+                Neto {formatCurrency(invoice.subtotal)} + IVA {formatCurrency(invoice.iva)} ={' '}
+                {formatCurrency(invoice.total)}
+              </p>
+            </div>
+          )}
 
           <Field>
             <FieldLabel>PDF de la proforma</FieldLabel>
@@ -249,12 +267,10 @@ export function EditProformaSheet({
           </Field>
 
           <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
-            <span className="text-sm text-muted-foreground">Total</span>
-            <span className="text-lg font-semibold tabular-nums">{formatCurrency(proforma.total)}</span>
+            <span className="text-sm text-muted-foreground">Neto (sin IVA)</span>
+            <span className="text-lg font-semibold tabular-nums">{formatCurrency(proforma.subtotal)}</span>
           </div>
           <input type="hidden" name="subtotal" value={proforma.subtotal} />
-          <input type="hidden" name="taxes" value={proforma.taxes} />
-          <input type="hidden" name="total" value={proforma.total} />
 
           <Field>
             <FieldLabel>Viajes incluidos ({proforma.tripIds.length})</FieldLabel>
@@ -271,9 +287,7 @@ export function EditProformaSheet({
                       >
                         {trip?.code ?? line.tripId.slice(0, 8)}
                       </Link>
-                      <span className="text-xs text-muted-foreground">
-                        {formatCurrency(line.amount)} + IVA {formatCurrency(line.taxes)}
-                      </span>
+                      <span className="text-xs text-muted-foreground">{formatCurrency(line.amount)}</span>
                     </li>
                   )
                 })

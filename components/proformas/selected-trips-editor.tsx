@@ -30,7 +30,7 @@ type SelectedTripsEditorProps = {
   selectedTripIds: string[]
   tripLines: Record<string, TripLineValues>
   onRemoveTrip: (tripId: string) => void
-  onUpdateLine: (tripId: string, field: 'amount' | 'taxes', value: string) => void
+  onUpdateLine: (tripId: string, value: string) => void
   onAddTrips: () => void
   disabled?: boolean
 }
@@ -106,9 +106,9 @@ export function SelectedTripsEditor({
                   <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <Field>
-                  <FieldLabel className="text-xs">Importe *</FieldLabel>
+                  <FieldLabel className="text-xs">Importe neto *</FieldLabel>
                   <Input
                     type="number"
                     min={0}
@@ -116,19 +116,7 @@ export function SelectedTripsEditor({
                     required
                     placeholder="0"
                     value={tripLines[trip.id]?.amount ?? ''}
-                    onChange={(e) => onUpdateLine(trip.id, 'amount', e.target.value)}
-                    disabled={disabled}
-                    className="h-9"
-                  />
-                </Field>
-                <Field>
-                  <FieldLabel className="text-xs">IVA</FieldLabel>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={tripLines[trip.id]?.taxes ?? '0'}
-                    onChange={(e) => onUpdateLine(trip.id, 'taxes', e.target.value)}
+                    onChange={(e) => onUpdateLine(trip.id, e.target.value)}
                     disabled={disabled}
                     className="h-9"
                   />

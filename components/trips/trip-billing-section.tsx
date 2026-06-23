@@ -98,13 +98,13 @@ export function TripBillingSection({ trip, proformas, invoices }: TripBillingSec
             )}
             {trip.status === 'pending_payment' && (
               <p className="text-xs text-muted-foreground w-full">
-                Para registrar el cobro, marcá la proforma como Cobrada en{' '}
-                <Link href="/app/proformas" className="underline">Proformas</Link>.
+                Para registrar el cobro, marcá la factura como Cobrada en{' '}
+                <Link href="/app/facturas" className="underline">Facturas</Link>.
               </p>
             )}
             {trip.status === 'paid' && (
               <p className="text-xs text-muted-foreground w-full">
-                Este viaje fue cobrado al marcar la proforma como Cobrada.
+                Este viaje fue cobrado al marcar la factura como Cobrada.
               </p>
             )}
           </div>
@@ -154,14 +154,20 @@ export function TripBillingSection({ trip, proformas, invoices }: TripBillingSec
               {invoices.map((inv) => (
                 <li key={inv.id} className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
                   <div>
-                    <span className="font-mono font-medium">{inv.invoiceNumber}</span>
-                    <span className="text-muted-foreground ml-2">Tipo {inv.invoiceType}</span>
-                    <span className="text-muted-foreground ml-2">{formatCurrency(inv.total)}</span>
+                    <Link href="/app/facturas" className="font-mono font-medium hover:underline">
+                      {inv.invoiceNumber}
+                    </Link>
+                    <span className="text-muted-foreground ml-2">
+                      Neto {formatCurrency(inv.subtotal)} + IVA {formatCurrency(inv.iva)}
+                    </span>
                   </div>
                   <Badge variant="outline">{invoiceStatusLabels[inv.status]}</Badge>
                 </li>
               ))}
             </ul>
+            <Button variant="link" className="px-0 mt-2" asChild>
+              <Link href="/app/facturas">Ver facturas</Link>
+            </Button>
           </CardContent>
         </Card>
       )}

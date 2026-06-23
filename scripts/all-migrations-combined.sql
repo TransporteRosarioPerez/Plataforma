@@ -727,3 +727,8 @@ alter table public.trips
   add column if not exists proforma_unit_price numeric;
 
 
+-- ========== 013_invoices_proforma_unique.sql ==========
+create unique index if not exists invoices_proforma_id_active_idx
+  on public.invoices (proforma_id)
+  where deleted_at is null and proforma_id is not null;
+

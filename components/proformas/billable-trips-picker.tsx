@@ -60,7 +60,7 @@ type BillableTripsPickerProps = {
   selectedTripIds: string[]
   tripLines: Record<string, TripLineValues>
   onToggleTrip: (tripId: string) => void
-  onUpdateLine: (tripId: string, field: 'amount' | 'taxes', value: string) => void
+  onUpdateLine: (tripId: string, value: string) => void
   onSelectTrips: (tripIds: string[]) => void
   onClearSelection: () => void
   disabled?: boolean
@@ -306,9 +306,9 @@ export function BillableTripsPicker({
                       )}
                     </label>
                     {compact && !pickerOnly && selected && (
-                      <div className="grid grid-cols-2 gap-2 px-3 pb-2.5 pl-10">
+                      <div className="px-3 pb-2.5 pl-10">
                         <Field>
-                          <FieldLabel className="text-xs">Importe *</FieldLabel>
+                          <FieldLabel className="text-xs">Importe neto *</FieldLabel>
                           <Input
                             type="number"
                             min={0}
@@ -316,19 +316,7 @@ export function BillableTripsPicker({
                             required
                             placeholder="0"
                             value={tripLines[trip.id]?.amount ?? ''}
-                            onChange={(e) => onUpdateLine(trip.id, 'amount', e.target.value)}
-                            disabled={disabled}
-                            className="h-8"
-                          />
-                        </Field>
-                        <Field>
-                          <FieldLabel className="text-xs">IVA</FieldLabel>
-                          <Input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={tripLines[trip.id]?.taxes ?? '0'}
-                            onChange={(e) => onUpdateLine(trip.id, 'taxes', e.target.value)}
+                            onChange={(e) => onUpdateLine(trip.id, e.target.value)}
                             disabled={disabled}
                             className="h-8"
                           />
@@ -422,32 +410,19 @@ export function BillableTripsPicker({
                     {formatTripDate(trip.departureDate)} · {tripArcorClientName(trip)} · {tripRouteLabel(trip)}
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Field>
-                    <FieldLabel className="text-xs">Importe</FieldLabel>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      required
-                      placeholder="0"
-                      value={tripLines[trip.id]?.amount ?? ''}
-                      onChange={(e) => onUpdateLine(trip.id, 'amount', e.target.value)}
-                      disabled={disabled}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel className="text-xs">IVA</FieldLabel>
-                    <Input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={tripLines[trip.id]?.taxes ?? '0'}
-                      onChange={(e) => onUpdateLine(trip.id, 'taxes', e.target.value)}
-                      disabled={disabled}
-                    />
-                  </Field>
-                </div>
+                <Field>
+                  <FieldLabel className="text-xs">Importe neto</FieldLabel>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    required
+                    placeholder="0"
+                    value={tripLines[trip.id]?.amount ?? ''}
+                    onChange={(e) => onUpdateLine(trip.id, e.target.value)}
+                    disabled={disabled}
+                  />
+                </Field>
               </div>
             ))}
           </div>

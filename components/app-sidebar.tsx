@@ -10,6 +10,7 @@ import {
   FileText,
   Settings,
   Route,
+  Receipt,
   UserCircle,
   FileWarning,
   BarChart3,
@@ -56,6 +57,12 @@ const mainNavItems = [
     href: '/app/proformas',
     icon: FileText,
     roles: ['superadmin', 'admin', 'ops', 'accounting']
+  },
+  {
+    title: 'Facturas',
+    href: '/app/facturas',
+    icon: Receipt,
+    roles: ['superadmin', 'admin', 'accounting']
   },
   {
     title: 'Vencimientos',

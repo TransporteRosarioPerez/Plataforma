@@ -27,6 +27,7 @@ const ORDER = [
   '010_soft_delete.sql',
   '011_trip_observations_soft_delete.sql',
   '012_trip_unit_price.sql',
+  '013_invoices_proforma_unique.sql',
 ]
 
 async function main() {

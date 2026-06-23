@@ -14,20 +14,30 @@ import {
   revertTripsAfterProformaRemoved,
 } from '@/lib/proformas/trip-billing-sync'
 
+function normalizeLineItems(raw: { trip_id: string; amount: number; taxes?: number }[]) {
+  return raw.map((item) => ({
+    trip_id: item.trip_id,
+    amount: item.amount,
+    taxes: 0,
+  }))
+}
+
 function parseLineItems(raw: string): { trip_id: string; amount: number; taxes: number }[] {
   try {
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
-    return parsed
-      .map((item) => {
-        const row = item as Record<string, unknown>
-        return {
-          trip_id: String(row.trip_id ?? ''),
-          amount: Number(row.amount ?? 0),
-          taxes: Number(row.taxes ?? 0),
-        }
-      })
-      .filter((item) => item.trip_id)
+    return normalizeLineItems(
+      parsed
+        .map((item) => {
+          const row = item as Record<string, unknown>
+          return {
+            trip_id: String(row.trip_id ?? ''),
+            amount: Number(row.amount ?? 0),
+            taxes: Number(row.taxes ?? 0),
+          }
+        })
+        .filter((item) => item.trip_id)
+    )
   } catch {
     return []
   }
@@ -140,7 +150,7 @@ export async function createProforma(
   }
 
   const totals = sumLineItems(lineItems)
-  const total = totals.subtotal + totals.taxes
+  const total = totals.subtotal
 
   const { data: proforma, error } = await supabase
     .from('proformas')
@@ -150,7 +160,7 @@ export async function createProforma(
       client_name: client.name,
       trip_ids: tripIds,
       subtotal: totals.subtotal,
-      taxes: totals.taxes,
+      taxes: 0,
       total,
       status: 'pendiente',
       received_date: parsed.data.received_date,
@@ -212,9 +222,8 @@ export async function updateProforma(
     .update({
       proforma_number: parsed.data.proforma_number,
       subtotal: parsed.data.subtotal,
-      taxes: parsed.data.taxes,
-      total: parsed.data.total,
-      status: parsed.data.status,
+      taxes: 0,
+      total: parsed.data.subtotal,
       received_date: parsed.data.received_date,
       notes: parsed.data.notes || null,
       ...(parsed.data.file_url
@@ -226,14 +235,6 @@ export async function updateProforma(
   if (error) return { error: error.message }
 
   const tripIds: string[] = existing.trip_ids ?? []
-
-  if (parsed.data.status === 'cobrada' && existing.status !== 'cobrada') {
-    const lineItems = await loadProformaLineAmounts(supabase, parsed.data.id)
-    await applyProformaLineItemsToTrips(supabase, lineItems, 'paid')
-  } else if (parsed.data.status === 'pendiente' && existing.status === 'cobrada') {
-    const lineItems = await loadProformaLineAmounts(supabase, parsed.data.id)
-    await applyProformaLineItemsToTrips(supabase, lineItems, 'pending_payment')
-  }
 
   revalidatePath('/app/proformas')
   revalidatePath('/app/viajes')
@@ -255,7 +256,20 @@ export async function deleteProforma(id: string): Promise<ActionState> {
     .is('deleted_at', null)
     .single()
 
-  const tripIdsToRevert: string[] = existing?.trip_ids ?? []
+  if (!existing) return { error: 'Proforma no encontrada' }
+
+  const { data: activeInvoice } = await supabase
+    .from('invoices')
+    .select('id')
+    .eq('proforma_id', id)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (activeInvoice) {
+    return { error: 'No se puede dar de baja: la proforma tiene una factura vinculada. Eliminá la factura primero.' }
+  }
+
+  const tripIdsToRevert: string[] = existing.trip_ids ?? []
 
   const { error } = await supabase
     .from('proformas')

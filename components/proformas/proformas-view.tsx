@@ -15,7 +15,7 @@ import {
 import { CreateProformaSheet } from '@/components/proformas/create-proforma-sheet'
 import { EditProformaSheet } from '@/components/proformas/edit-proforma-sheet'
 import { deleteProforma } from '@/lib/actions/proformas'
-import { OPERATIONAL_TRIP_STATUSES, type Proforma, Client, Trip } from '@/lib/types'
+import { OPERATIONAL_TRIP_STATUSES, type Proforma, Client, Trip, Invoice } from '@/lib/types'
 import { toast } from 'sonner'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -64,9 +64,10 @@ type ProformasViewProps = {
   proformas: Proforma[]
   clients: Client[]
   trips: Trip[]
+  invoicesByProformaId: Record<string, Invoice>
 }
 
-export function ProformasView({ proformas, clients, trips }: ProformasViewProps) {
+export function ProformasView({ proformas, clients, trips, invoicesByProformaId }: ProformasViewProps) {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -134,8 +135,8 @@ export function ProformasView({ proformas, clients, trips }: ProformasViewProps)
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Proformas</h1>
           <p className="text-muted-foreground">
-            Proformas a tus clientes reales. Solo viajes en Pendiente de pago.
-            Al marcar Cobrada, los viajes pasan a Pagado automáticamente.
+            Proformas a tus clientes reales con importes netos (sin IVA). Facturá en el módulo Facturas;
+            el cobro se registra al marcar la factura como Cobrada.
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
@@ -192,7 +193,7 @@ export function ProformasView({ proformas, clients, trips }: ProformasViewProps)
                     <TableHead>Cliente</TableHead>
                     <TableHead>Recibida</TableHead>
                     <TableHead className="text-center">Viajes</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Neto</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead className="w-[50px]" />
                   </TableRow>
@@ -211,7 +212,7 @@ export function ProformasView({ proformas, clients, trips }: ProformasViewProps)
                       </TableCell>
                       <TableCell className="text-center">{p.tripIds.length}</TableCell>
                       <TableCell className="text-right font-semibold">
-                        {formatCurrency(p.total)}
+                        {formatCurrency(p.subtotal)}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={statusColors[p.status]}>
@@ -272,6 +273,7 @@ export function ProformasView({ proformas, clients, trips }: ProformasViewProps)
         open={editOpen}
         onOpenChange={setEditOpen}
         proforma={editing}
+        invoice={editing ? invoicesByProformaId[editing.id] ?? null : null}
         trips={trips}
         onRequestDelete={(p) => {
           setToDelete(p)

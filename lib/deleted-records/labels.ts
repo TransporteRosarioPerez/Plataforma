@@ -13,6 +13,7 @@ const ENTITY_LABELS: Record<RestorableEntity, string> = {
   expense_category: 'Categoría de gasto',
   inventory_item: 'Ítem de inventario',
   inventory_movement: 'Movimiento de inventario',
+  invoice: 'Factura',
 }
 
 export function getEntityTypeLabel(entity: RestorableEntity): string {

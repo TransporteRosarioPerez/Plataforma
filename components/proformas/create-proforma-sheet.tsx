@@ -81,17 +81,12 @@ export function CreateProformaSheet({
     onOpenChange(next)
   }
 
-  const taxesNum = useMemo(
-    () => selectedTripIds.reduce((sum, id) => sum + (Number(tripLines[id]?.taxes) || 0), 0),
-    [selectedTripIds, tripLines]
-  )
-
   const subtotal = useMemo(
     () => selectedTripIds.reduce((sum, id) => sum + (Number(tripLines[id]?.amount) || 0), 0),
     [selectedTripIds, tripLines]
   )
 
-  const total = subtotal + taxesNum
+  const total = subtotal
 
   const lineItemsJson = useMemo(
     () =>
@@ -99,7 +94,7 @@ export function CreateProformaSheet({
         selectedTripIds.map((id) => ({
           trip_id: id,
           amount: Number(tripLines[id]?.amount ?? 0),
-          taxes: Number(tripLines[id]?.taxes ?? 0),
+          taxes: 0,
         }))
       ),
     [selectedTripIds, tripLines]
@@ -128,13 +123,13 @@ export function CreateProformaSheet({
     })
   }
 
-  const updateTripLine = (tripId: string, field: 'amount' | 'taxes', value: string) => {
+  const updateTripLine = (tripId: string, value: string) => {
     setTripLines((lines) => ({
       ...lines,
       [tripId]: {
-        amount: field === 'amount' ? value : lines[tripId]?.amount ?? '',
-        taxes: field === 'taxes' ? value : lines[tripId]?.taxes ?? '0',
-        fromEstimate: field === 'amount' ? false : lines[tripId]?.fromEstimate,
+        amount: value,
+        taxes: '0',
+        fromEstimate: false,
       },
     }))
   }
@@ -223,7 +218,7 @@ export function CreateProformaSheet({
                     ? 'Sin viajes'
                     : `${selectedTripIds.length} viaje${selectedTripIds.length === 1 ? '' : 's'}`}
                 </span>
-                <span className="text-base font-semibold tabular-nums">{formatCurrency(total)}</span>
+                <span className="text-base font-semibold tabular-nums">Neto {formatCurrency(total)}</span>
               </div>
             )}
             <div className="flex w-full gap-2">

@@ -25,6 +25,7 @@ export type RestorableEntity =
   | 'expense_category'
   | 'inventory_item'
   | 'inventory_movement'
+  | 'invoice'
 
 const TABLE_BY_ENTITY: Record<RestorableEntity, string> = {
   client: 'clients',
@@ -39,6 +40,7 @@ const TABLE_BY_ENTITY: Record<RestorableEntity, string> = {
   expense_category: 'expense_categories',
   inventory_item: 'inventory_items',
   inventory_movement: 'inventory_movements',
+  invoice: 'invoices',
 }
 
 function revalidateForEntity(entity: RestorableEntity, extra?: { tripId?: string; entityType?: string; entityId?: string; itemId?: string }) {
@@ -88,6 +90,11 @@ function revalidateForEntity(entity: RestorableEntity, extra?: { tripId?: string
     case 'inventory_movement':
       revalidatePath('/app/inventario')
       if (extra?.itemId) revalidatePath(`/app/inventario/${extra.itemId}`)
+      break
+    case 'invoice':
+      revalidatePath('/app/facturas')
+      revalidatePath('/app/proformas')
+      revalidatePath('/app/viajes')
       break
   }
 }
@@ -208,6 +215,56 @@ async function restoreTripExpense(id: string, tripId?: string): Promise<ActionSt
   return { success: 'Gasto recuperado' }
 }
 
+async function restoreInvoiceRecord(id: string): Promise<ActionState> {
+  const supabase = await createClient()
+
+  const { data: invoice, error: fetchError } = await supabase
+    .from('invoices')
+    .select('id, status, proforma_id, trip_ids')
+    .eq('id', id)
+    .not('deleted_at', 'is', null)
+    .single()
+
+  if (fetchError || !invoice) return { error: 'Factura no encontrada' }
+  if (!invoice.proforma_id) return { error: 'Factura sin proforma vinculada' }
+
+  const { data: other } = await supabase
+    .from('invoices')
+    .select('id')
+    .eq('proforma_id', invoice.proforma_id)
+    .is('deleted_at', null)
+    .neq('id', id)
+    .maybeSingle()
+
+  if (other) {
+    return { error: 'La proforma ya tiene otra factura activa' }
+  }
+
+  const { error } = await supabase.from('invoices').update(restoreUpdate).eq('id', id)
+  if (error) {
+    if (error.code === '23505') {
+      return { error: 'No se puede recuperar: conflicto con otra factura activa' }
+    }
+    return { error: error.message }
+  }
+
+  const proformaStatus = invoice.status === 'cobrada' ? 'cobrada' : 'facturada'
+  await supabase.from('proformas').update({ status: proformaStatus }).eq('id', invoice.proforma_id)
+
+  if (invoice.status === 'cobrada') {
+    const lineItems = await loadProformaLineAmounts(supabase, invoice.proforma_id)
+    await applyProformaLineItemsToTrips(supabase, lineItems, 'paid')
+  }
+
+  const tripIds: string[] = invoice.trip_ids ?? []
+  revalidateForEntity('invoice')
+  for (const tripId of tripIds) {
+    revalidatePath(`/app/viajes/${tripId}`)
+  }
+
+  return { success: 'Factura recuperada' }
+}
+
 export async function restoreRecord(
   entity: RestorableEntity,
   id: string,
@@ -225,6 +282,10 @@ export async function restoreRecord(
 
   if (entity === 'trip_expense') {
     return restoreTripExpense(id, context?.tripId)
+  }
+
+  if (entity === 'invoice') {
+    return restoreInvoiceRecord(id)
   }
 
   const supabase = await createClient()
