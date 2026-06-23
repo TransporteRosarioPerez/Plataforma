@@ -26,6 +26,11 @@ import {
 } from '@/lib/types'
 import {
   countCustomTripFilters,
+  getTripDateRangeLabel,
+  patchTripDatePeriod,
+  tripDatePeriodLabels,
+  TRIP_DATE_PERIOD_OPTIONS,
+  type TripDatePeriod,
   type TripListFilters,
 } from '@/lib/trips/list-filters'
 
@@ -51,6 +56,18 @@ export function TripFiltersPanel({
   vehicles,
 }: TripFiltersPanelProps) {
   const customCount = countCustomTripFilters(filters)
+  const dateRangeLabel = getTripDateRangeLabel(filters)
+
+  const handleDatePeriodChange = (period: TripDatePeriod) => {
+    onChange(patchTripDatePeriod(period))
+  }
+
+  const handleCustomDateChange = (patch: Pick<TripListFilters, 'dateFrom' | 'dateTo'>) => {
+    onChange({
+      datePeriod: 'custom',
+      ...patch,
+    })
+  }
 
   const trucks = vehicles.filter((v) => v.type === 'truck' || v.type === 'semi')
   const sortedClients = [...clients].sort((a, b) => a.name.localeCompare(b.name, 'es'))
@@ -209,25 +226,54 @@ export function TripFiltersPanel({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="trip-filter-from">Salida desde</Label>
-            <Input
-              id="trip-filter-from"
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => onChange({ dateFrom: e.target.value })}
-            />
+          <div className="space-y-2 sm:col-span-2 lg:col-span-3">
+            <Label htmlFor="trip-filter-period">Período de salida</Label>
+            <Select value={filters.datePeriod} onValueChange={handleDatePeriodChange}>
+              <SelectTrigger id="trip-filter-period" className="w-full">
+                <SelectValue placeholder="Todas las fechas" />
+              </SelectTrigger>
+              <SelectContent>
+                {TRIP_DATE_PERIOD_OPTIONS.map((period) => (
+                  <SelectItem key={period} value={period}>
+                    {tripDatePeriodLabels[period]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {dateRangeLabel && filters.datePeriod !== 'custom' && (
+              <p className="text-xs text-muted-foreground">{dateRangeLabel}</p>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="trip-filter-to">Salida hasta</Label>
-            <Input
-              id="trip-filter-to"
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => onChange({ dateTo: e.target.value })}
-            />
-          </div>
+          {filters.datePeriod === 'custom' && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="trip-filter-from">Salida desde</Label>
+                <Input
+                  id="trip-filter-from"
+                  type="date"
+                  value={filters.dateFrom}
+                  onChange={(e) => handleCustomDateChange({ dateFrom: e.target.value, dateTo: filters.dateTo })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="trip-filter-to">Salida hasta</Label>
+                <Input
+                  id="trip-filter-to"
+                  type="date"
+                  value={filters.dateTo}
+                  onChange={(e) => handleCustomDateChange({ dateFrom: filters.dateFrom, dateTo: e.target.value })}
+                />
+              </div>
+              {dateRangeLabel && (
+                <p className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-3">
+                  {dateRangeLabel}
+                </p>
+              )}
+            </>
+          )}
+
         </div>
       </CollapsibleContent>
     </Collapsible>

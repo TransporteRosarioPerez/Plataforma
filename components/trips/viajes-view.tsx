@@ -20,14 +20,24 @@ import {
   buildTripListSearchParams,
   DEFAULT_TRIP_LIST_FILTERS,
   filterTrips,
+  getTripDateRangeLabel,
   parseTripListFilters,
+  patchTripDatePeriod,
   tripSortDate,
+  type TripDatePeriod,
   type TripListFilters,
   type TripQuickFilter,
 } from '@/lib/trips/list-filters'
 import { NewTripSheet } from '@/components/trips/new-trip-sheet'
 
 const PAGE_SIZES = [25, 50, 100] as const
+
+const DATE_QUICK_FILTERS: { id: TripDatePeriod; label: string }[] = [
+  { id: 'all', label: 'Todas las fechas' },
+  { id: 'current_month', label: 'Este mes' },
+  { id: 'previous_month', label: 'Mes anterior' },
+  { id: 'last_3_months', label: 'Últimos 3 meses' },
+]
 
 const dateFormatter = new Intl.DateTimeFormat('es-AR', {
   day: '2-digit',
@@ -60,8 +70,7 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
       parsed.vehicleId !== 'all' ||
       parsed.tripType !== 'all' ||
       parsed.cargoType !== 'all' ||
-      !!parsed.dateFrom ||
-      !!parsed.dateTo ||
+      parsed.datePeriod !== 'all' ||
       parsed.pdf !== 'all'
     )
   })
@@ -109,6 +118,10 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
     patchFilters(patch)
   }
 
+  const applyDatePeriod = (period: TripDatePeriod) => {
+    patchFilters(patchTripDatePeriod(period))
+  }
+
   const clearCustomFilters = () => {
     patchFilters({
       clientId: 'all',
@@ -116,12 +129,15 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
       vehicleId: 'all',
       tripType: 'all',
       cargoType: 'all',
+      datePeriod: 'all',
       dateFrom: '',
       dateTo: '',
       pdf: 'all',
       quick: filters.quick === 'with_pdf' ? 'all' : filters.quick,
     })
   }
+
+  const dateRangeLabel = getTripDateRangeLabel(filters)
 
   const filtered = useMemo(
     () => filterTrips(trips, filters).sort((a, b) => tripSortDate(b) - tripSortDate(a)),
@@ -174,6 +190,11 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                 <CardDescription>
                   {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
                   {filtered.length !== trips.length && ` de ${trips.length}`}
+                  {dateRangeLabel && (
+                    <span className="block sm:inline sm:before:content-['·_'] sm:before:mx-1">
+                      Salida: {dateRangeLabel}
+                    </span>
+                  )}
                 </CardDescription>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -197,6 +218,20 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {DATE_QUICK_FILTERS.map(({ id, label }) => (
+                <Button
+                  key={id}
+                  type="button"
+                  variant={filters.datePeriod === id ? 'secondary' : 'outline'}
+                  size="sm"
+                  onClick={() => applyDatePeriod(id)}
+                >
+                  {label}
+                </Button>
+              ))}
             </div>
 
             <div className="flex flex-wrap gap-2">
