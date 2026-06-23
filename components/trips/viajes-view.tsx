@@ -45,9 +45,13 @@ const dateFormatter = new Intl.DateTimeFormat('es-AR', {
   year: '2-digit',
 })
 
+function formatTripDate(date?: Date) {
+  return date ? dateFormatter.format(date) : '—'
+}
+
 function formatRouteLine(trip: Trip) {
   const destination = trip.destination?.trim()
-  const origin = trip.origin.trim()
+  const origin = trip.origin?.trim() ?? ''
   if (destination && destination !== origin) {
     return `${origin} → ${destination}`
   }

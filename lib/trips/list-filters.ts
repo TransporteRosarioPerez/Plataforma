@@ -237,7 +237,7 @@ export function filterTrips(trips: Trip[], filters: TripListFilters): Trip[] {
     const matchSearch =
       !q ||
       trip.code.toLowerCase().includes(q) ||
-      trip.origin.toLowerCase().includes(q) ||
+      trip.origin?.toLowerCase().includes(q) ||
       (trip.destination?.toLowerCase().includes(q) ?? false) ||
       (trip.client?.name.toLowerCase().includes(q) ?? false) ||
       (trip.client?.accountId?.toLowerCase().includes(q) ?? false) ||
