@@ -1,7 +1,7 @@
 // RemitoListo ERP Types
 
 // User roles
-export type UserRole = 'superadmin' | 'admin' | 'ops' | 'accounting'
+export type UserRole = 'superadmin' | 'ops'
 
 export type SessionProfile = {
   id: string
@@ -447,9 +447,7 @@ export const cargoTypeLabels: Record<CargoType, string> = {
 
 export const roleLabels: Record<UserRole, string> = {
   superadmin: 'Super Administrador',
-  admin: 'Administrador',
-  ops: 'Logística',
-  accounting: 'Contabilidad'
+  ops: 'Operador',
 }
 
 // Document entity type

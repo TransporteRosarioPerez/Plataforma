@@ -1,5 +1,6 @@
 'use client'
 
+import type { ComponentType } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -34,99 +35,105 @@ import { APP_NAME } from '@/lib/brand'
 import { INVENTORY_ENABLED } from '@/lib/features'
 import type { UserRole } from '@/lib/types'
 
-const mainNavItems = [
+type NavItem = {
+  title: string
+  href: string
+  icon: ComponentType<{ className?: string }>
+  roles: readonly UserRole[]
+}
+
+const mainNavItems: NavItem[] = [
   {
     title: 'Dashboard',
     href: '/app/dashboard',
     icon: LayoutDashboard,
-    roles: ['superadmin', 'admin', 'ops', 'accounting']
+    roles: ['superadmin', 'ops'] as const,
   },
   {
     title: 'Reportes',
     href: '/app/reportes',
     icon: BarChart3,
-    roles: ['superadmin', 'admin', 'accounting']
+    roles: ['superadmin'] as const,
   },
   {
     title: 'Viajes',
     href: '/app/viajes',
     icon: Route,
-    roles: ['superadmin', 'admin', 'ops']
+    roles: ['superadmin', 'ops'] as const,
   },
   {
     title: 'Combustible',
     href: '/app/combustible',
     icon: Fuel,
-    roles: ['superadmin', 'admin', 'ops']
+    roles: ['superadmin', 'ops'] as const,
   },
   {
     title: 'Proformas',
     href: '/app/proformas',
     icon: FileText,
-    roles: ['superadmin', 'admin', 'ops', 'accounting']
+    roles: ['superadmin', 'ops'] as const,
   },
   {
     title: 'Facturas',
     href: '/app/facturas',
     icon: Receipt,
-    roles: ['superadmin', 'admin', 'accounting']
+    roles: ['superadmin'] as const,
   },
   {
     title: 'Vencimientos',
     href: '/app/documentos',
     icon: FileWarning,
-    roles: ['superadmin', 'admin', 'ops']
+    roles: ['superadmin', 'ops'] as const,
   }
 ]
 
-const masterNavItems = [
+const masterNavItems: NavItem[] = [
   {
     title: 'Flota',
     href: '/app/flota',
     icon: Truck,
-    roles: ['superadmin', 'admin', 'ops']
+    roles: ['superadmin', 'ops'] as const,
   },
   {
     title: 'Choferes',
     href: '/app/choferes',
     icon: UserCircle,
-    roles: ['superadmin', 'admin', 'ops']
+    roles: ['superadmin', 'ops'] as const,
   },
   {
     title: 'Clientes',
     href: '/app/clientes',
     icon: Building2,
-    roles: ['superadmin', 'admin', 'ops', 'accounting']
+    roles: ['superadmin', 'ops'] as const,
   },
-  // Inventario — oculto mientras INVENTORY_ENABLED = false
   ...(INVENTORY_ENABLED
     ? [{
         title: 'Inventario',
         href: '/app/inventario',
         icon: Package,
-        roles: ['superadmin', 'admin', 'ops'] as const,
+        roles: ['superadmin', 'ops'] as const,
       }]
     : []),
 ]
 
-const adminNavItems = [
+const adminNavItems: NavItem[] = [
   {
     title: 'Papelera',
     href: '/app/papelera',
     icon: ArchiveRestore,
-    roles: ['superadmin', 'admin']
+    roles: ['superadmin'] as const,
   },
   {
     title: 'Equipo',
     href: '/app/equipo',
     icon: Users,
-    roles: ['superadmin', 'admin']
+    roles: ['superadmin'] as const,
   },
   {
     title: 'Configuración',
     href: '/app/configuracion',
     icon: Settings,
-    roles: ['superadmin', 'admin']
+    roles: ['superadmin'] as const,
   }
 ]
 
@@ -137,7 +144,7 @@ type AppSidebarProps = {
 export function AppSidebar({ userRole }: AppSidebarProps) {
   const pathname = usePathname()
 
-  const filterByRole = (items: typeof mainNavItems) => {
+  const filterByRole = (items: NavItem[]) => {
     return items.filter(item => item.roles.includes(userRole))
   }
 

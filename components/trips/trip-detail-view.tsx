@@ -32,6 +32,7 @@ type TripDetailViewProps = {
   expenses: TripExpense[]
   fuelTransactions: FuelTransaction[]
   expenseCategories: ExpenseCategory[]
+  canViewInvoices?: boolean
 }
 
 export function TripDetailView({
@@ -43,6 +44,7 @@ export function TripDetailView({
   expenses,
   fuelTransactions,
   expenseCategories,
+  canViewInvoices = false,
 }: TripDetailViewProps) {
   const router = useRouter()
   const [status, setStatus] = useState(trip.status)
@@ -215,7 +217,12 @@ export function TripDetailView({
         </TabsContent>
 
         <TabsContent value="facturacion" className="mt-4">
-          <TripBillingSection trip={trip} proformas={proformas} invoices={invoices} />
+          <TripBillingSection
+            trip={trip}
+            proformas={proformas}
+            invoices={invoices}
+            canViewInvoices={canViewInvoices}
+          />
         </TabsContent>
       </Tabs>
 

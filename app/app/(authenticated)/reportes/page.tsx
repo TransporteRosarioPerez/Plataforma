@@ -1,3 +1,4 @@
+import { requireSuperadmin } from '@/lib/auth/session'
 import { getCashKpis } from '@/lib/data/cash-kpis'
 import { getOperationalKpis } from '@/lib/data/dashboard-kpis'
 import { parseDashboardPeriod } from '@/lib/dashboard/periods'
@@ -9,6 +10,7 @@ type ReportesPageProps = {
 }
 
 export default async function ReportesPage({ searchParams }: ReportesPageProps) {
+  await requireSuperadmin()
   const params = await searchParams
   const period = parseDashboardPeriod(params.period)
   const view = parseReportView(params.view)

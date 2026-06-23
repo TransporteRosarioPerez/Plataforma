@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { requireSession } from '@/lib/auth/session'
+import { requireSuperadmin } from '@/lib/auth/session'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
 import { alertSettingsSchema } from '@/lib/validations/entity-documents'
 
@@ -10,7 +10,7 @@ export async function updateAlertSettings(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireSession()
+  await requireSuperadmin()
   const parsed = parseForm(alertSettingsSchema, formData)
   if (!parsed.success) return { error: parsed.error }
 

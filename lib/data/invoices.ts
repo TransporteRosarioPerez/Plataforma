@@ -1,9 +1,12 @@
 import 'server-only'
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { getSession, requireSuperadmin } from '@/lib/auth/session'
+import { canAccessInvoices } from '@/lib/auth/permissions'
 import { mapInvoice, type DbInvoice } from '@/lib/db/mappers'
 
 export const getInvoices = cache(async () => {
+  await requireSuperadmin()
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('invoices')
@@ -16,6 +19,8 @@ export const getInvoices = cache(async () => {
 })
 
 export const getInvoiceById = cache(async (id: string) => {
+  const session = await getSession()
+  if (!session || !canAccessInvoices(session.profile.role)) return null
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('invoices')
@@ -29,6 +34,8 @@ export const getInvoiceById = cache(async (id: string) => {
 })
 
 export const getInvoiceByProformaId = cache(async (proformaId: string) => {
+  const session = await getSession()
+  if (!session || !canAccessInvoices(session.profile.role)) return null
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('invoices')
@@ -42,6 +49,8 @@ export const getInvoiceByProformaId = cache(async (proformaId: string) => {
 })
 
 export const getInvoicesByTripId = cache(async (tripId: string) => {
+  const session = await getSession()
+  if (!session || !canAccessInvoices(session.profile.role)) return []
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('invoices')
@@ -55,6 +64,11 @@ export const getInvoicesByTripId = cache(async (tripId: string) => {
 
 export const getInvoicesByProformaIds = cache(async (proformaIds: string[]) => {
   if (proformaIds.length === 0) return {} as Record<string, ReturnType<typeof mapInvoice>>
+
+  const session = await getSession()
+  if (!session || !canAccessInvoices(session.profile.role)) {
+    return {} as Record<string, ReturnType<typeof mapInvoice>>
+  }
 
   const supabase = await createClient()
   const { data, error } = await supabase

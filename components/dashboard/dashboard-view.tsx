@@ -12,9 +12,10 @@ const formatCurrency = (n: number) =>
 
 type DashboardViewProps = {
   stats: DashboardStats
+  canViewReports?: boolean
 }
 
-export function DashboardView({ stats }: DashboardViewProps) {
+export function DashboardView({ stats, canViewReports = false }: DashboardViewProps) {
   const operationalKpis = [
     {
       title: 'Viajes registrados',
@@ -79,7 +80,9 @@ export function DashboardView({ stats }: DashboardViewProps) {
   const quickActions = [
     { label: 'Nuevo viaje', href: '/app/viajes', icon: Plus },
     { label: 'Agregar cliente', href: '/app/clientes', icon: Building2 },
-    { label: 'Ver reportes', href: '/app/reportes', icon: BarChart3 },
+    ...(canViewReports
+      ? [{ label: 'Ver reportes', href: '/app/reportes', icon: BarChart3 }]
+      : []),
     { label: 'Ver flota', href: '/app/flota', icon: Truck },
   ]
 

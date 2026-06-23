@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { requireSession } from '@/lib/auth/session'
+import { requireSuperadmin } from '@/lib/auth/session'
 import { restoreUpdate } from '@/lib/db/soft-delete'
 import type { ActionState } from '@/lib/validations/parse-form'
 import { getMovementQuantityDelta, wouldStockGoNegative } from '@/lib/inventory/stock'
@@ -270,7 +270,7 @@ export async function restoreRecord(
   id: string,
   context?: { tripId?: string; entityType?: string; entityId?: string; itemId?: string }
 ): Promise<ActionState> {
-  await requireSession()
+  await requireSuperadmin()
 
   if (entity === 'proforma') {
     return restoreProformaRecord(id)

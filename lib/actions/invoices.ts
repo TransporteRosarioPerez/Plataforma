@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { requireSession } from '@/lib/auth/session'
+import { requireSuperadmin } from '@/lib/auth/session'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
 import { createInvoiceSchema } from '@/lib/validations/invoices'
@@ -25,7 +25,7 @@ export async function createInvoice(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireSession()
+  await requireSuperadmin()
   const parsed = parseForm(createInvoiceSchema, formData)
   if (!parsed.success) return { error: parsed.error }
 
@@ -100,7 +100,7 @@ export async function createInvoice(
 }
 
 export async function markInvoicePaid(invoiceId: string): Promise<ActionState> {
-  await requireSession()
+  await requireSuperadmin()
   const supabase = await createClient()
 
   const { data: invoice, error: fetchError } = await supabase
@@ -138,7 +138,7 @@ export async function markInvoicePaid(invoiceId: string): Promise<ActionState> {
 }
 
 export async function deleteInvoice(id: string): Promise<ActionState> {
-  await requireSession()
+  await requireSuperadmin()
   const supabase = await createClient()
 
   const { data: invoice, error: fetchError } = await supabase

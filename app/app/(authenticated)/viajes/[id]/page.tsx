@@ -8,6 +8,8 @@ import { getTripExpensesByTripId } from '@/lib/data/trip-expenses'
 import { getFuelTransactionsByTripId } from '@/lib/data/fuel-transactions'
 import { getExpenseCategories } from '@/lib/data/expense-categories'
 import { TripDetailView } from '@/components/trips/trip-detail-view'
+import { getSession } from '@/lib/auth/session'
+import { canAccessInvoices } from '@/lib/auth/permissions'
 
 export default async function TripDetailPage({
   params,
@@ -15,6 +17,8 @@ export default async function TripDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+  const session = await getSession()
+  const canViewInvoices = session ? canAccessInvoices(session.profile.role) : false
   const [trip, documents, observations, proformas, invoices, expenses, fuelTransactions, expenseCategories] =
     await Promise.all([
       getTripById(id),
@@ -39,6 +43,7 @@ export default async function TripDetailPage({
       expenses={expenses}
       fuelTransactions={fuelTransactions}
       expenseCategories={expenseCategories}
+      canViewInvoices={canViewInvoices}
     />
   )
 }

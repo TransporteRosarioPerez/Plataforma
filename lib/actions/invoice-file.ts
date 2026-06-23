@@ -3,7 +3,7 @@
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { createClient } from '@/lib/supabase/server'
-import { requireSession } from '@/lib/auth/session'
+import { requireSuperadmin } from '@/lib/auth/session'
 import type { ActionState } from '@/lib/validations/parse-form'
 import { getSpacesBucket, getSpacesClient } from '@/lib/storage/spaces'
 
@@ -22,7 +22,7 @@ export async function generateInvoiceUploadUrl(
   clientId: string,
   fileName: string
 ): Promise<ActionState & { uploadUrl?: string; storageKey?: string; contentType?: string }> {
-  await requireSession()
+  await requireSuperadmin()
 
   if (!fileName.toLowerCase().endsWith('.pdf')) {
     return { error: 'Solo se permiten archivos PDF' }
@@ -48,7 +48,7 @@ export async function generateInvoiceUploadUrl(
 export async function generateInvoiceDownloadUrl(
   invoiceId: string
 ): Promise<ActionState & { url?: string; fileName?: string }> {
-  await requireSession()
+  await requireSuperadmin()
 
   const supabase = await createClient()
   const { data, error } = await supabase

@@ -65,9 +65,16 @@ type ProformasViewProps = {
   clients: Client[]
   trips: Trip[]
   invoicesByProformaId: Record<string, Invoice>
+  canViewInvoices?: boolean
 }
 
-export function ProformasView({ proformas, clients, trips, invoicesByProformaId }: ProformasViewProps) {
+export function ProformasView({
+  proformas,
+  clients,
+  trips,
+  invoicesByProformaId,
+  canViewInvoices = false,
+}: ProformasViewProps) {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -279,6 +286,7 @@ export function ProformasView({ proformas, clients, trips, invoicesByProformaId 
           setToDelete(p)
           setDeleteOpen(true)
         }}
+        canViewInvoices={canViewInvoices}
       />
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>

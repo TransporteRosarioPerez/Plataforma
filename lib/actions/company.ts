@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { requireSession } from '@/lib/auth/session'
+import { requireSuperadmin } from '@/lib/auth/session'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
 
 const companySchema = z.object({
@@ -17,7 +17,7 @@ export async function updateCompanySettings(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireSession()
+  await requireSuperadmin()
   const parsed = parseForm(companySchema, formData)
   if (!parsed.success) return { error: parsed.error }
 

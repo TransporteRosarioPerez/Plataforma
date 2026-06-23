@@ -1,6 +1,7 @@
 import 'server-only'
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import { requireSuperadmin } from '@/lib/auth/session'
 import {
   type DashboardPeriod,
   formatPeriodRangeLabel,
@@ -214,6 +215,7 @@ function buildCollectionBridge(
 }
 
 export const getCashKpis = cache(async (period: DashboardPeriod): Promise<CashKpiData> => {
+  await requireSuperadmin()
   const supabase = await createClient()
   const now = new Date()
   const range = getDashboardPeriodRange(period, now)

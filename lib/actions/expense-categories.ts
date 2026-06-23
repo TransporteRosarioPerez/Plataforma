@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { requireSession } from '@/lib/auth/session'
+import { requireSuperadmin } from '@/lib/auth/session'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
 
@@ -17,7 +17,7 @@ export async function upsertExpenseCategory(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  await requireSession()
+  await requireSuperadmin()
   const parsed = parseForm(schema, formData)
   if (!parsed.success) return { error: parsed.error }
 
@@ -50,7 +50,7 @@ export async function upsertExpenseCategory(
 }
 
 export async function toggleExpenseCategory(id: string, isActive: boolean): Promise<ActionState> {
-  await requireSession()
+  await requireSuperadmin()
   const supabase = await createClient()
   const { error } = await supabase
     .from('expense_categories')
@@ -62,7 +62,7 @@ export async function toggleExpenseCategory(id: string, isActive: boolean): Prom
 }
 
 export async function deleteExpenseCategory(id: string): Promise<ActionState> {
-  await requireSession()
+  await requireSuperadmin()
   const supabase = await createClient()
   const { error } = await supabase
     .from('expense_categories')

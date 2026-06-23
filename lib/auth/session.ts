@@ -40,3 +40,13 @@ export async function requireSession() {
   if (!session) redirect('/app/login')
   return session
 }
+
+export async function requireRole(...allowed: UserRole[]) {
+  const session = await requireSession()
+  if (!allowed.includes(session.profile.role)) redirect('/app/dashboard')
+  return session
+}
+
+export async function requireSuperadmin() {
+  return requireRole('superadmin')
+}

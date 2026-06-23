@@ -40,6 +40,7 @@ type EditProformaSheetProps = {
   invoice: Invoice | null
   trips: Trip[]
   onRequestDelete: (proforma: Proforma) => void
+  canViewInvoices?: boolean
 }
 
 export function EditProformaSheet({
@@ -49,6 +50,7 @@ export function EditProformaSheet({
   invoice,
   trips,
   onRequestDelete,
+  canViewInvoices = false,
 }: EditProformaSheetProps) {
   const router = useRouter()
   const [pdfUploading, setPdfUploading] = useState(false)
@@ -193,14 +195,22 @@ export function EditProformaSheet({
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {proforma.status === 'pendiente' && 'Creá la factura en el módulo Facturas.'}
-                {proforma.status === 'facturada' && 'Marcá la factura como cobrada en Facturas.'}
+                {proforma.status === 'pendiente' && (
+                  canViewInvoices
+                    ? 'Creá la factura en el módulo Facturas.'
+                    : 'Un administrador debe crear la factura en el módulo Facturas.'
+                )}
+                {proforma.status === 'facturada' && (
+                  canViewInvoices
+                    ? 'Marcá la factura como cobrada en Facturas.'
+                    : 'Un administrador debe marcar la factura como cobrada.'
+                )}
                 {proforma.status === 'cobrada' && 'Cobrada vía factura — viajes en Pagado.'}
               </p>
             </Field>
           </div>
 
-          {invoice && (
+          {canViewInvoices && invoice && (
             <div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-1 text-sm">
               <p className="font-medium">Factura vinculada</p>
               <p>

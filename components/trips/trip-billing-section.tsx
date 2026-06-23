@@ -29,9 +29,15 @@ type TripBillingSectionProps = {
   trip: Trip
   proformas: Proforma[]
   invoices: Invoice[]
+  canViewInvoices?: boolean
 }
 
-export function TripBillingSection({ trip, proformas, invoices }: TripBillingSectionProps) {
+export function TripBillingSection({
+  trip,
+  proformas,
+  invoices,
+  canViewInvoices = false,
+}: TripBillingSectionProps) {
   const isBillingStatus = trip.status === 'pending_payment' || trip.status === 'paid'
   const hasIncome = trip.totalIncome > 0
 
@@ -98,8 +104,14 @@ export function TripBillingSection({ trip, proformas, invoices }: TripBillingSec
             )}
             {trip.status === 'pending_payment' && (
               <p className="text-xs text-muted-foreground w-full">
-                Para registrar el cobro, marcá la factura como Cobrada en{' '}
-                <Link href="/app/facturas" className="underline">Facturas</Link>.
+                {canViewInvoices ? (
+                  <>
+                    Para registrar el cobro, marcá la factura como Cobrada en{' '}
+                    <Link href="/app/facturas" className="underline">Facturas</Link>.
+                  </>
+                ) : (
+                  'Para registrar el cobro, contactá al administrador para marcar la factura como cobrada.'
+                )}
               </p>
             )}
             {trip.status === 'paid' && (
@@ -144,7 +156,7 @@ export function TripBillingSection({ trip, proformas, invoices }: TripBillingSec
         </CardContent>
       </Card>
 
-      {invoices.length > 0 && (
+      {canViewInvoices && invoices.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Facturas ({invoices.length})</CardTitle>

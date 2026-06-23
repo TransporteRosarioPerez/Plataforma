@@ -1,27 +1,36 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { requireSession } from '@/lib/auth/session'
-import { roleLabels } from '@/lib/types'
+import { TeamTable } from '@/components/equipo/team-table'
+import { requireSuperadmin } from '@/lib/auth/session'
+import { getTeamProfiles } from '@/lib/data/users'
 
 export default async function EquipoPage() {
-  const { profile } = await requireSession()
+  const { profile } = await requireSuperadmin()
+  const profiles = await getTeamProfiles()
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Equipo</h1>
         <p className="text-muted-foreground">
-          Gestión de usuarios vía Supabase Auth. Invitaciones en iteración futura.
+          Gestioná los roles de los usuarios de la plataforma. Los usuarios nuevos se crean en
+          Supabase Dashboard → Authentication → Users.
         </p>
       </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>Tu sesión</CardTitle>
-          <CardDescription>Usuario autenticado actualmente</CardDescription>
+          <CardTitle>Usuarios</CardTitle>
+          <CardDescription>
+            {profiles.length} usuario{profiles.length === 1 ? '' : 's'} registrado
+            {profiles.length === 1 ? '' : 's'}
+          </CardDescription>
         </CardHeader>
-        <CardContent className="text-sm space-y-1">
-          <p><span className="text-muted-foreground">Nombre:</span> {profile.name}</p>
-          <p><span className="text-muted-foreground">Email:</span> {profile.email}</p>
-          <p><span className="text-muted-foreground">Rol:</span> {roleLabels[profile.role]}</p>
+        <CardContent>
+          {profiles.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No hay usuarios en la plataforma.</p>
+          ) : (
+            <TeamTable profiles={profiles} currentUserId={profile.id} />
+          )}
         </CardContent>
       </Card>
     </div>

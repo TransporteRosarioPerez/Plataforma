@@ -76,7 +76,7 @@ export async function registerTripPdf(tripId: string, storageKey: string): Promi
 
   const { error: tripError } = await supabase
     .from('trips')
-    .update({ pdf_storage_key: storageKey, pdf_uploaded_by: session.id })
+    .update({ pdf_storage_key: storageKey, pdf_uploaded_by: session.profile.id })
     .eq('id', tripId)
 
   if (tripError) return { error: tripError.message }
