@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Plus, Search, Route, FileText, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,12 +12,20 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { TripStatusBadge } from '@/components/trip-status-badge'
 import { TripEconomicsSummary } from '@/components/trips/trip-economics-summary'
+import { TripFiltersPanel } from '@/components/trips/trip-filters-panel'
 import { tripStatusLabels } from '@/lib/types'
 import type { Trip, TripStatus, ArcorClient, Vehicle, Driver } from '@/lib/types'
 import { getTripMasterPrerequisites } from '@/lib/trip-prerequisites'
+import {
+  buildTripListSearchParams,
+  DEFAULT_TRIP_LIST_FILTERS,
+  filterTrips,
+  parseTripListFilters,
+  tripSortDate,
+  type TripListFilters,
+  type TripQuickFilter,
+} from '@/lib/trips/list-filters'
 import { NewTripSheet } from '@/components/trips/new-trip-sheet'
-
-type QuickFilter = 'all' | 'pending_payment' | 'paid' | 'with_pdf'
 
 const PAGE_SIZES = [25, 50, 100] as const
 
@@ -31,10 +39,6 @@ function formatTripDate(date?: Date) {
   return date ? dateFormatter.format(date) : '—'
 }
 
-function tripSortDate(trip: Trip) {
-  return trip.departureDate?.getTime() ?? trip.createdAt.getTime()
-}
-
 type ViajesViewProps = {
   trips: Trip[]
   arcorClients: ArcorClient[]
@@ -44,64 +48,90 @@ type ViajesViewProps = {
 
 export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesViewProps) {
   const router = useRouter()
-  const [search, setSearch] = useState('')
-  const [filterStatus, setFilterStatus] = useState<TripStatus | 'all'>('all')
-  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all')
+  const searchParams = useSearchParams()
+  const filtersFromUrl = useMemo(() => parseTripListFilters(searchParams), [searchParams])
+
+  const [filters, setFilters] = useState<TripListFilters>(filtersFromUrl)
+  const [filtersOpen, setFiltersOpen] = useState(() => {
+    const parsed = parseTripListFilters(searchParams)
+    return (
+      parsed.clientId !== 'all' ||
+      parsed.driverId !== 'all' ||
+      parsed.vehicleId !== 'all' ||
+      parsed.tripType !== 'all' ||
+      parsed.cargoType !== 'all' ||
+      !!parsed.dateFrom ||
+      !!parsed.dateTo ||
+      parsed.pdf !== 'all'
+    )
+  })
   const [pageSize, setPageSize] = useState<number>(50)
   const [page, setPage] = useState(1)
   const [showNewTrip, setShowNewTrip] = useState(false)
 
+  useEffect(() => {
+    setFilters(filtersFromUrl)
+  }, [filtersFromUrl])
+
   const prerequisites = getTripMasterPrerequisites(arcorClients, vehicles, drivers)
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase()
-    return trips
-      .filter((t) => {
-        const matchSearch =
-          !search ||
-          t.code.toLowerCase().includes(q) ||
-          t.origin.toLowerCase().includes(q) ||
-          (t.destination?.toLowerCase().includes(q) ?? false) ||
-          (t.client?.name.toLowerCase().includes(q) ?? false) ||
-          (t.client?.accountId?.toLowerCase().includes(q) ?? false) ||
-          (t.driver?.name.toLowerCase().includes(q) ?? false) ||
-          (t.vehicle?.plate.toLowerCase().includes(q) ?? false)
+  const syncFilters = (next: TripListFilters) => {
+    setFilters(next)
+    setPage(1)
+    const qs = buildTripListSearchParams(next).toString()
+    router.replace(qs ? `/app/viajes?${qs}` : '/app/viajes', { scroll: false })
+  }
 
-        const matchStatus = filterStatus === 'all' || t.status === filterStatus
+  const patchFilters = (patch: Partial<TripListFilters>) => {
+    syncFilters({ ...filters, ...patch })
+  }
 
-        const matchQuick =
-          quickFilter === 'all' ||
-          (quickFilter === 'pending_payment' && t.status === 'pending_payment') ||
-          (quickFilter === 'paid' && t.status === 'paid') ||
-          (quickFilter === 'with_pdf' && !!t.pdfStorageKey)
+  const applyQuickFilter = (next: TripQuickFilter) => {
+    const patch: Partial<TripListFilters> = { quick: next }
+    if (next === 'pending_payment') patch.status = 'pending_payment'
+    else if (next === 'paid') patch.status = 'paid'
+    else if (next === 'with_pdf') {
+      patch.pdf = 'yes'
+    } else if (next === 'all') {
+      patch.status = 'all'
+      patch.pdf = 'all'
+    }
+    patchFilters(patch)
+  }
 
-        return matchSearch && matchStatus && matchQuick
-      })
-      .sort((a, b) => tripSortDate(b) - tripSortDate(a))
-  }, [trips, search, filterStatus, quickFilter])
+  const applyStatusFilter = (value: TripStatus | 'all') => {
+    const patch: Partial<TripListFilters> = { status: value }
+    if (value !== 'pending_payment' && value !== 'paid') {
+      if (filters.quick === 'pending_payment' || filters.quick === 'paid') {
+        patch.quick = 'all'
+      }
+    }
+    patchFilters(patch)
+  }
+
+  const clearCustomFilters = () => {
+    patchFilters({
+      clientId: 'all',
+      driverId: 'all',
+      vehicleId: 'all',
+      tripType: 'all',
+      cargoType: 'all',
+      dateFrom: '',
+      dateTo: '',
+      pdf: 'all',
+      quick: filters.quick === 'with_pdf' ? 'all' : filters.quick,
+    })
+  }
+
+  const filtered = useMemo(
+    () => filterTrips(trips, filters).sort((a, b) => tripSortDate(b) - tripSortDate(a)),
+    [trips, filters]
+  )
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const safePage = Math.min(page, totalPages)
   const pageStart = (safePage - 1) * pageSize
   const pageTrips = filtered.slice(pageStart, pageStart + pageSize)
-
-  const applyQuickFilter = (next: QuickFilter) => {
-    setQuickFilter(next)
-    setPage(1)
-    if (next === 'pending_payment') setFilterStatus('pending_payment')
-    else if (next === 'paid') setFilterStatus('paid')
-    else if (next === 'all') setFilterStatus('all')
-  }
-
-  const applyStatusFilter = (value: TripStatus | 'all') => {
-    setFilterStatus(value)
-    setPage(1)
-    if (value !== 'pending_payment' && value !== 'paid') {
-      if (quickFilter === 'pending_payment' || quickFilter === 'paid') {
-        setQuickFilter('all')
-      }
-    }
-  }
 
   const newTripButton = (
     <Button onClick={() => setShowNewTrip(true)} disabled={!prerequisites.canCreate}>
@@ -151,16 +181,13 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Buscar carga, cliente, ruta..."
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value)
-                      setPage(1)
-                    }}
+                    value={filters.search}
+                    onChange={(e) => patchFilters({ search: e.target.value })}
                     className="pl-9"
                   />
                 </div>
                 <select
-                  value={filterStatus}
+                  value={filters.status}
                   onChange={(e) => applyStatusFilter(e.target.value as TripStatus | 'all')}
                   className="h-9 rounded-md border px-3 text-sm"
                 >
@@ -184,7 +211,7 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                 <Button
                   key={id}
                   type="button"
-                  variant={quickFilter === id ? 'default' : 'outline'}
+                  variant={filters.quick === id ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => applyQuickFilter(id)}
                 >
@@ -192,6 +219,17 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                 </Button>
               ))}
             </div>
+
+            <TripFiltersPanel
+              filters={filters}
+              open={filtersOpen}
+              onOpenChange={setFiltersOpen}
+              onChange={patchFilters}
+              onClearCustom={clearCustomFilters}
+              clients={arcorClients}
+              drivers={drivers}
+              vehicles={vehicles}
+            />
           </div>
         </CardHeader>
 
@@ -200,6 +238,14 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
             <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
               <Route className="h-12 w-12 mb-4 opacity-50" />
               <p>No hay viajes que coincidan con los filtros.</p>
+              <Button
+                type="button"
+                variant="link"
+                className="mt-2"
+                onClick={() => syncFilters({ ...DEFAULT_TRIP_LIST_FILTERS })}
+              >
+                Restablecer todos los filtros
+              </Button>
             </div>
           ) : (
             <>
