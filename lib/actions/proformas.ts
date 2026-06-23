@@ -191,6 +191,7 @@ export async function createProforma(
 
   revalidatePath('/app/proformas')
   revalidatePath('/app/viajes')
+  revalidatePath('/app/reportes')
   for (const tripId of tripIds) {
     revalidatePath(`/app/viajes/${tripId}`)
   }
@@ -238,6 +239,7 @@ export async function updateProforma(
 
   revalidatePath('/app/proformas')
   revalidatePath('/app/viajes')
+  revalidatePath('/app/reportes')
   for (const tripId of tripIds) {
     revalidatePath(`/app/viajes/${tripId}`)
   }
@@ -283,6 +285,7 @@ export async function deleteProforma(id: string): Promise<ActionState> {
   revalidatePath('/app/proformas')
   revalidatePath('/app/viajes')
   revalidatePath('/app/papelera')
+  revalidatePath('/app/reportes')
   for (const tripId of tripIdsToRevert) {
     revalidatePath(`/app/viajes/${tripId}`)
   }

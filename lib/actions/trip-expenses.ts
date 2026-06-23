@@ -11,6 +11,7 @@ import { recalculateTripTotals } from '@/lib/trip-totals'
 function revalidateTripPaths(tripId: string) {
   revalidatePath('/app/viajes')
   revalidatePath(`/app/viajes/${tripId}`)
+  revalidatePath('/app/reportes')
 }
 
 export async function upsertTripExpense(

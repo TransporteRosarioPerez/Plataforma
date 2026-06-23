@@ -5,6 +5,7 @@ import { INVENTORY_ENABLED } from '@/lib/features'
 import { getTripEconomics } from '@/lib/trip-economics'
 import {
   type DashboardPeriod,
+  formatPeriodRangeLabel,
   getDashboardPeriodRange,
   getPreviousDashboardPeriodRange,
   isDateWithinRange,
@@ -35,7 +36,7 @@ export type MonthlyKpi = {
   pendingIncomeTrips: number
 }
 
-export type PeriodKpiSummary = {
+export type OperationalKpiSummary = {
   income: number
   expenses: number
   operationalPurchases: number
@@ -46,14 +47,10 @@ export type PeriodKpiSummary = {
   lossTrips: number
   breakEvenTrips: number
   pendingIncomeTrips: number
-  pendingPaymentTrips: number
-  pendingPaymentAmount: number
-  paidTrips: number
-  paidAmount: number
-  pendingProformas: number
-  pendingProformasAmount: number
   lowStockItems: number
 }
+
+export type PeriodKpiSummary = OperationalKpiSummary
 
 export type PeriodComparison = {
   profitDelta: number
@@ -66,7 +63,7 @@ export type PeriodComparison = {
 export type DashboardKpiData = {
   period: DashboardPeriod
   rangeLabel: string
-  summary: PeriodKpiSummary
+  summary: OperationalKpiSummary
   monthly: MonthlyKpi[]
   comparison: PeriodComparison | null
 }
@@ -90,7 +87,7 @@ function emptyMonthly(bucket: MonthBucket): MonthlyKpi {
   }
 }
 
-function summarizeTrips(trips: TripKpiRow[], range: DateRange): PeriodKpiSummary {
+function summarizeTrips(trips: TripKpiRow[], range: DateRange): OperationalKpiSummary {
   const inRange = trips.filter((trip) => isDateWithinRange(getTripReferenceDate(trip), range))
 
   let income = 0
@@ -100,10 +97,6 @@ function summarizeTrips(trips: TripKpiRow[], range: DateRange): PeriodKpiSummary
   let lossTrips = 0
   let breakEvenTrips = 0
   let pendingIncomeTrips = 0
-  let pendingPaymentTrips = 0
-  let pendingPaymentAmount = 0
-  let paidTrips = 0
-  let paidAmount = 0
 
   for (const trip of inRange) {
     const tripIncome = Number(trip.total_income)
@@ -119,15 +112,6 @@ function summarizeTrips(trips: TripKpiRow[], range: DateRange): PeriodKpiSummary
     else if (economics.outcome === 'loss') lossTrips += 1
     else if (economics.outcome === 'break_even') breakEvenTrips += 1
     else if (economics.outcome === 'pending_income') pendingIncomeTrips += 1
-
-    if (trip.status === 'pending_payment') {
-      pendingPaymentTrips += 1
-      pendingPaymentAmount += tripIncome
-    }
-    if (trip.status === 'paid') {
-      paidTrips += 1
-      paidAmount += tripIncome
-    }
   }
 
   return {
@@ -141,12 +125,6 @@ function summarizeTrips(trips: TripKpiRow[], range: DateRange): PeriodKpiSummary
     lossTrips,
     breakEvenTrips,
     pendingIncomeTrips,
-    pendingPaymentTrips,
-    pendingPaymentAmount,
-    paidTrips,
-    paidAmount,
-    pendingProformas: 0,
-    pendingProformasAmount: 0,
     lowStockItems: 0,
   }
 }
@@ -199,22 +177,17 @@ function buildMonthlySeries(trips: TripKpiRow[], buckets: MonthBucket[]): Monthl
   return buckets.map((bucket) => byKey.get(bucket.key)!)
 }
 
-export const getDashboardKpis = cache(async (period: DashboardPeriod): Promise<DashboardKpiData> => {
+export const getOperationalKpis = cache(async (period: DashboardPeriod): Promise<DashboardKpiData> => {
   const supabase = await createClient()
   const now = new Date()
   const range = getDashboardPeriodRange(period, now)
   const previousRange = getPreviousDashboardPeriodRange(period, now)
 
-  const [tripsResult, proformasResult, purchasesResult, inventoryResult] = await Promise.all([
+  const [tripsResult, purchasesResult, inventoryResult] = await Promise.all([
     supabase
       .from('trips')
       .select('departure_date, created_at, total_income, total_expenses, profit, status')
       .is('deleted_at', null),
-    supabase
-      .from('proformas')
-      .select('total, status')
-      .is('deleted_at', null)
-      .eq('status', 'pendiente'),
     INVENTORY_ENABLED
       ? supabase
           .from('inventory_movements')
@@ -256,10 +229,6 @@ export const getDashboardKpis = cache(async (period: DashboardPeriod): Promise<D
     })
   }
 
-  summary.pendingProformas = proformasResult.data?.length ?? 0
-  summary.pendingProformasAmount =
-    proformasResult.data?.reduce((sum, row) => sum + Number(row.total ?? 0), 0) ?? 0
-
   let comparison: PeriodComparison | null = null
   if (previousRange) {
     const previousSummary = summarizeTrips(trips, previousRange)
@@ -278,17 +247,14 @@ export const getDashboardKpis = cache(async (period: DashboardPeriod): Promise<D
     }
   }
 
-  const rangeFormatter = new Intl.DateTimeFormat('es-AR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
-
   return {
     period,
-    rangeLabel: `${rangeFormatter.format(range.from)} – ${rangeFormatter.format(range.to)}`,
+    rangeLabel: formatPeriodRangeLabel(range),
     summary,
     monthly,
     comparison,
   }
 })
+
+/** @deprecated Use getOperationalKpis */
+export const getDashboardKpis = getOperationalKpis

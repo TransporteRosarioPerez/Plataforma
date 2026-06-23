@@ -14,6 +14,7 @@ function revalidateInvoicePaths(proformaId?: string, tripIds: string[] = []) {
   revalidatePath('/app/proformas')
   revalidatePath('/app/viajes')
   revalidatePath('/app/papelera')
+  revalidatePath('/app/reportes')
   if (proformaId) revalidatePath(`/app/proformas`)
   for (const tripId of tripIds) {
     revalidatePath(`/app/viajes/${tripId}`)
