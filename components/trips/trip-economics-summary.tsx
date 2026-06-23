@@ -31,7 +31,7 @@ const resultTextStyles: Record<TripEconomicsOutcome, string> = {
 type TripEconomicsSummaryProps = {
   income: number
   expenses: number
-  variant?: 'banner' | 'compact' | 'badge' | 'table'
+  variant?: 'banner' | 'compact' | 'badge' | 'table' | 'table-inline'
   preview?: boolean
   className?: string
 }
@@ -62,6 +62,15 @@ export function TripEconomicsSummary({
           <span className="ml-1 tabular-nums">{formatTripCurrency(Math.abs(economics.profit))}</span>
         ) : null}
       </Badge>
+    )
+  }
+
+  if (variant === 'table-inline') {
+    if (!showResultAmount) return null
+    return (
+      <span className={cn('text-[11px] font-semibold tabular-nums', resultTextStyles[economics.outcome], className)}>
+        {formatTripCurrency(economics.profit)}
+      </span>
     )
   }
 

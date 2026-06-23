@@ -284,95 +284,76 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
             </div>
           ) : (
             <>
-              <Table>
+              <div className="[&_[data-slot=table-container]]:overflow-x-hidden">
+              <Table className="table-fixed">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[88px]">Carga</TableHead>
-                    <TableHead className="min-w-[120px]">Cliente</TableHead>
-                    <TableHead className="min-w-[180px]">Ruta</TableHead>
-                    <TableHead className="hidden lg:table-cell">Fechas</TableHead>
-                    <TableHead className="hidden md:table-cell min-w-[100px]">Operación</TableHead>
-                    <TableHead className="min-w-[7.5rem]">Estado</TableHead>
-                    <TableHead className="min-w-[6.5rem] text-right">Resultado</TableHead>
-                    <TableHead className="w-10 text-center">PDF</TableHead>
+                    <TableHead className="w-[4.75rem] px-1">Carga</TableHead>
+                    <TableHead className="w-[17%] px-1">Cliente</TableHead>
+                    <TableHead className="px-1">Viaje</TableHead>
+                    <TableHead className="w-[5.25rem] px-1 text-right">Estado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pageTrips.map((trip) => (
+                  {pageTrips.map((trip) => {
+                    const metaParts = [
+                      formatTripDate(trip.departureDate),
+                      trip.driver?.name,
+                      trip.vehicle?.plate,
+                    ].filter(Boolean)
+
+                    return (
                     <TableRow
                       key={trip.id}
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => router.push(`/app/viajes/${trip.id}`)}
                     >
-                      <TableCell className="font-mono font-medium">
-                        {trip.code}
+                      <TableCell className="max-w-0 whitespace-normal px-1 py-2">
+                        <div className="flex items-start gap-1 min-w-0">
+                          {trip.pdfStorageKey ? (
+                            <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-label="Tiene PDF" />
+                          ) : (
+                            <span className="w-3.5 shrink-0" aria-hidden />
+                          )}
+                          <span className="font-mono text-xs font-medium leading-tight break-all">
+                            {trip.code}
+                          </span>
+                        </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="font-medium truncate">
+                      <TableCell className="max-w-0 whitespace-normal px-1 py-2">
+                        <div className="truncate text-sm font-medium">
                           {trip.client?.name ?? '—'}
                         </div>
-                        {trip.client?.accountId && (
-                          <div className="text-xs text-muted-foreground truncate">
-                            Cta. {trip.client.accountId}
+                      </TableCell>
+                      <TableCell className="max-w-0 whitespace-normal px-1 py-2">
+                        <div
+                          className="truncate text-sm"
+                          title={`${trip.origin} → ${trip.destination ?? '—'}`}
+                        >
+                          {trip.origin} → {trip.destination ?? '—'}
+                        </div>
+                        {metaParts.length > 0 && (
+                          <div className="truncate text-[11px] text-muted-foreground" title={metaParts.join(' · ')}>
+                            {metaParts.join(' · ')}
                           </div>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <div className="truncate" title={`${trip.origin} → ${trip.destination ?? '—'}`}>
-                          {trip.origin} → {trip.destination ?? '—'}
+                      <TableCell className="max-w-0 whitespace-normal px-1 py-2 text-right">
+                        <div className="flex flex-col items-end gap-0.5 min-w-0">
+                          <TripStatusBadge status={trip.status} size="sm" compact />
+                          <TripEconomicsSummary
+                            income={trip.totalIncome}
+                            expenses={trip.totalExpenses}
+                            variant="table-inline"
+                          />
                         </div>
-                        <div className="text-xs text-muted-foreground lg:hidden">
-                          {formatTripDate(trip.departureDate)}
-                          {trip.arrivalDate ? ` → ${formatTripDate(trip.arrivalDate)}` : ''}
-                        </div>
-                        <div className="text-xs text-muted-foreground md:hidden truncate">
-                          {[trip.driver?.name, trip.vehicle?.plate].filter(Boolean).join(' · ') || '—'}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground hidden lg:table-cell">
-                        <div className="text-xs leading-tight">
-                          <div>{formatTripDate(trip.departureDate)}</div>
-                          {trip.arrivalDate && <div>{formatTripDate(trip.arrivalDate)}</div>}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <div className="truncate text-sm">{trip.driver?.name ?? '—'}</div>
-                        {trip.vehicle ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="text-xs text-muted-foreground truncate">{trip.vehicle.plate}</div>
-                            </TooltipTrigger>
-                            {trip.trailer && (
-                              <TooltipContent>
-                                Semi: {trip.trailer.plate}
-                              </TooltipContent>
-                            )}
-                          </Tooltip>
-                        ) : (
-                          <div className="text-xs text-muted-foreground">—</div>
-                        )}
-                      </TableCell>
-                      <TableCell className="whitespace-normal">
-                        <TripStatusBadge status={trip.status} size="sm" className="inline-flex max-w-full" />
-                      </TableCell>
-                      <TableCell className="whitespace-normal text-right">
-                        <TripEconomicsSummary
-                          income={trip.totalIncome}
-                          expenses={trip.totalExpenses}
-                          variant="table"
-                        />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {trip.pdfStorageKey ? (
-                          <FileText className="h-4 w-4 inline text-primary" aria-label="Tiene PDF" />
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    )
+                  })}
                 </TableBody>
               </Table>
+              </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-4 pt-4 border-t">
                 <p className="text-sm text-muted-foreground">

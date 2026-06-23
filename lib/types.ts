@@ -406,6 +406,16 @@ export const tripStatusLabels: Record<TripStatus, string> = {
   paid: 'Pagado',
 }
 
+export const tripStatusShortLabels: Record<TripStatus, string> = {
+  in_progress: 'En curso',
+  delivered: 'Entregado',
+  incomplete: 'Incompleto',
+  pending_wirtrack: 'P. Wirtrack',
+  sent: 'Enviado',
+  pending_payment: 'Pend. pago',
+  paid: 'Pagado',
+}
+
 export const tripStatusColors: Record<TripStatus, string> = {
   in_progress: 'bg-purple-500/10 text-purple-700 border-purple-500/30',
   delivered: 'bg-blue-500/10 text-blue-700 border-blue-500/30',
