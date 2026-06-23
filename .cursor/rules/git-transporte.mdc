@@ -46,4 +46,4 @@ core.sshCommand = ssh -i ~/.ssh/id_ed25519_transporte -o IdentitiesOnly=yes
 - Proyecto: `plataforma` en team `transporte-rosario-perezs-projects`
 - URL prod: `https://plataforma-mauve.vercel.app`
 - Login de la app: `/app/login` (no `/login`)
-- Framework en Vercel debe ser **Next.js**, no "Other" (si Output Directory apunta a `public/`, todo da 404)
+- Framework en Vercel debe ser **Next.js** (`vercel.json` → `"framework": "nextjs"`). Si queda en "Other" con output `public/`, todo da 404.

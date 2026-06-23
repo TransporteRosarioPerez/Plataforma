@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "migrate:legacy": "tsx scripts/migrate-from-legacy.ts"
+    "migrate:legacy": "tsx scripts/migrate-from-legacy.ts",
+    "apply:migrations": "tsx scripts/apply-migrations.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

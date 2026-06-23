@@ -14,3 +14,9 @@ next.user-config.*
 node_modules
 .next/
 .DS_Store
+.vercel
+supabase/.temp/
+
+# macOS / iCloud duplicate copies
+**/* 2.*
+**/* 2/
