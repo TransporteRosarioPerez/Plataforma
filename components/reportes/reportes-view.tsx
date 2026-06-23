@@ -1,11 +1,11 @@
 import { Suspense } from 'react'
 import { ReportesKpisSection } from '@/components/reportes/reportes-kpis-section'
-import { parseReportView } from '@/components/reportes/reportes-shared'
+import type { ReportView } from '@/lib/dashboard/report-view'
 import type { CashKpiData } from '@/lib/data/cash-kpis'
 import type { DashboardKpiData } from '@/lib/data/dashboard-kpis'
 
 type ReportesViewProps = {
-  view: ReturnType<typeof parseReportView>
+  view: ReportView
   operationalData: DashboardKpiData
   cashData: CashKpiData
 }

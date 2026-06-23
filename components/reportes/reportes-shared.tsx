@@ -8,21 +8,16 @@ import {
   dashboardPeriodLabels,
   type DashboardPeriod,
 } from '@/lib/dashboard/periods'
+import {
+  REPORT_VIEWS,
+  reportViewLabels,
+  type ReportView,
+} from '@/lib/dashboard/report-view'
 import { formatTripCurrency } from '@/lib/trip-economics'
 import { cn } from '@/lib/utils'
 
-export type ReportView = 'operativo' | 'caja'
-
-export const REPORT_VIEWS: ReportView[] = ['operativo', 'caja']
-
-export const reportViewLabels: Record<ReportView, string> = {
-  operativo: 'Operativo',
-  caja: 'Caja',
-}
-
-export function parseReportView(value?: string | null): ReportView {
-  return value === 'caja' ? 'caja' : 'operativo'
-}
+export type { ReportView } from '@/lib/dashboard/report-view'
+export { REPORT_VIEWS, reportViewLabels } from '@/lib/dashboard/report-view'
 
 export function formatCompactCurrency(value: number) {
   if (Math.abs(value) >= 1_000_000) {
@@ -139,7 +134,9 @@ const dateFormatter = new Intl.DateTimeFormat('es-AR', {
   year: 'numeric',
 })
 
-export function formatReportDate(date: Date | null | undefined) {
-  if (!date) return '—'
+export function formatReportDate(value: string | Date | null | undefined) {
+  if (!value) return '—'
+  const date = typeof value === 'string' ? new Date(value) : value
+  if (Number.isNaN(date.getTime())) return '—'
   return dateFormatter.format(date)
 }

@@ -1,7 +1,7 @@
 import { getCashKpis } from '@/lib/data/cash-kpis'
 import { getOperationalKpis } from '@/lib/data/dashboard-kpis'
 import { parseDashboardPeriod } from '@/lib/dashboard/periods'
-import { parseReportView } from '@/components/reportes/reportes-shared'
+import { parseReportView } from '@/lib/dashboard/report-view'
 import { ReportesView } from '@/components/reportes/reportes-view'
 
 type ReportesPageProps = {

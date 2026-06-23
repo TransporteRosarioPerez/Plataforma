@@ -60,11 +60,11 @@ export type CashKpiSummary = {
 export type CashCollectionBridgeRow = {
   invoiceId: string
   invoiceNumber: string
-  paidDate: Date
+  paidDate: string
   collectedNet: number
   tripId: string
   tripCode: string
-  tripDepartureDate: Date | null
+  tripDepartureDate: string | null
 }
 
 export type CashPeriodComparison = {
@@ -201,16 +201,16 @@ function buildCollectionBridge(
       rows.push({
         invoiceId: inv.id,
         invoiceNumber: inv.invoice_number,
-        paidDate,
+        paidDate: paidDate.toISOString().slice(0, 10),
         collectedNet: Number(inv.subtotal),
         tripId: trip.id,
         tripCode: trip.code,
-        tripDepartureDate: parseDate(trip.departure_date),
+        tripDepartureDate: trip.departure_date,
       })
     }
   }
 
-  return rows.sort((a, b) => b.paidDate.getTime() - a.paidDate.getTime())
+  return rows.sort((a, b) => b.paidDate.localeCompare(a.paidDate))
 }
 
 export const getCashKpis = cache(async (period: DashboardPeriod): Promise<CashKpiData> => {
@@ -236,6 +236,8 @@ export const getCashKpis = cache(async (period: DashboardPeriod): Promise<CashKp
   ])
 
   if (invoicesResult.error) throw new Error(invoicesResult.error.message)
+  if (proformasResult.error) throw new Error(proformasResult.error.message)
+  if (tripsResult.error) throw new Error(tripsResult.error.message)
 
   const invoices = (invoicesResult.data ?? []) as InvoiceKpiRow[]
   const tripsById = new Map(
