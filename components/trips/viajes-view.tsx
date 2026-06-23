@@ -305,9 +305,10 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
               <Table className="table-fixed">
                 <colgroup>
                   <col className="w-[10%]" />
-                  <col className="w-[24%]" />
-                  <col className="w-[36%]" />
-                  <col className="w-[30%]" />
+                  <col className="w-[22%]" />
+                  <col className="w-[34%]" />
+                  <col className="w-[26%]" />
+                  <col className="w-[8%]" />
                 </colgroup>
                 <TableHeader>
                   <TableRow>
@@ -315,6 +316,7 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                     <TableHead className="px-2">Cliente</TableHead>
                     <TableHead className="px-2">Viaje</TableHead>
                     <TableHead className="px-2">Estado</TableHead>
+                    <TableHead className="px-2 text-center">PDF</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -329,16 +331,9 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                       onClick={() => router.push(`/app/viajes/${trip.id}`)}
                     >
                       <TableCell className="max-w-0 whitespace-normal px-2 py-2 align-top">
-                        <div className="flex items-start gap-1 min-w-0">
-                          {trip.pdfStorageKey ? (
-                            <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-label="Tiene PDF" />
-                          ) : (
-                            <span className="w-3.5 shrink-0" aria-hidden />
-                          )}
-                          <span className="font-mono text-xs font-medium leading-tight truncate" title={trip.code}>
-                            {trip.code}
-                          </span>
-                        </div>
+                        <span className="font-mono text-xs font-medium leading-tight truncate block" title={trip.code}>
+                          {trip.code}
+                        </span>
                       </TableCell>
                       <TableCell className="max-w-0 whitespace-normal px-2 py-2 align-top">
                         <div className="truncate text-sm font-medium" title={trip.client?.name}>
@@ -369,6 +364,16 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                             variant="table-inline"
                           />
                         </div>
+                      </TableCell>
+                      <TableCell className="whitespace-normal px-2 py-2 align-top text-center">
+                        {trip.pdfStorageKey ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+                            <FileText className="h-3.5 w-3.5" aria-hidden />
+                            Sí
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No</span>
+                        )}
                       </TableCell>
                     </TableRow>
                     )
