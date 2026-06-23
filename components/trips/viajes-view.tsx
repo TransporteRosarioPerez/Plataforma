@@ -249,16 +249,16 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
             </div>
           ) : (
             <>
-              <Table className="table-fixed">
+              <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[88px]">Carga</TableHead>
-                    <TableHead className="w-[120px]">Cliente</TableHead>
-                    <TableHead>Ruta</TableHead>
-                    <TableHead className="w-[100px] hidden lg:table-cell">Fechas</TableHead>
-                    <TableHead className="w-[110px] hidden md:table-cell">Operación</TableHead>
-                    <TableHead className="w-[100px]">Estado</TableHead>
-                    <TableHead className="w-[130px] text-right">Resultado</TableHead>
+                    <TableHead className="min-w-[120px]">Cliente</TableHead>
+                    <TableHead className="min-w-[180px]">Ruta</TableHead>
+                    <TableHead className="hidden lg:table-cell">Fechas</TableHead>
+                    <TableHead className="hidden md:table-cell min-w-[100px]">Operación</TableHead>
+                    <TableHead className="min-w-[7.5rem]">Estado</TableHead>
+                    <TableHead className="min-w-[6.5rem] text-right">Resultado</TableHead>
                     <TableHead className="w-10 text-center">PDF</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -317,15 +317,14 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                           <div className="text-xs text-muted-foreground">—</div>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <TripStatusBadge status={trip.status} size="sm" />
+                      <TableCell className="whitespace-normal">
+                        <TripStatusBadge status={trip.status} size="sm" className="inline-flex max-w-full" />
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="whitespace-normal text-right">
                         <TripEconomicsSummary
                           income={trip.totalIncome}
                           expenses={trip.totalExpenses}
-                          variant="badge"
-                          className="ml-auto"
+                          variant="table"
                         />
                       </TableCell>
                       <TableCell className="text-center">
