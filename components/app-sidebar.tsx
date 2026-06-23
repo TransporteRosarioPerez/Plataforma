@@ -16,6 +16,7 @@ import {
   BarChart3,
   Package,
   ArchiveRestore,
+  Fuel,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -50,6 +51,12 @@ const mainNavItems = [
     title: 'Viajes',
     href: '/app/viajes',
     icon: Route,
+    roles: ['superadmin', 'admin', 'ops']
+  },
+  {
+    title: 'Combustible',
+    href: '/app/combustible',
+    icon: Fuel,
     roles: ['superadmin', 'admin', 'ops']
   },
   {

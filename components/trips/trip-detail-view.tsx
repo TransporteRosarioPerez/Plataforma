@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   tripStatusLabels, tripStatusColors, cargoTypeLabels, tripTypeLabels, OPERATIONAL_TRIP_STATUSES,
 } from '@/lib/types'
-import type { Trip, TripDocument, TripObservation, Proforma, Invoice, TripExpense, ExpenseCategory } from '@/lib/types'
+import type { Trip, TripDocument, TripObservation, Proforma, Invoice, TripExpense, ExpenseCategory, FuelTransaction } from '@/lib/types'
+import { TripFuelSection } from '@/components/trips/trip-fuel-section'
 import { updateTripStatus, deleteTrip } from '@/lib/actions/trips'
 import { TripBillingSection } from '@/components/trips/trip-billing-section'
 import { TripExpensesSection } from '@/components/trips/trip-expenses-section'
@@ -29,6 +30,7 @@ type TripDetailViewProps = {
   proformas: Proforma[]
   invoices: Invoice[]
   expenses: TripExpense[]
+  fuelTransactions: FuelTransaction[]
   expenseCategories: ExpenseCategory[]
 }
 
@@ -39,6 +41,7 @@ export function TripDetailView({
   proformas,
   invoices,
   expenses,
+  fuelTransactions,
   expenseCategories,
 }: TripDetailViewProps) {
   const router = useRouter()
@@ -202,7 +205,8 @@ export function TripDetailView({
           </div>
         </TabsContent>
 
-        <TabsContent value="gastos" className="mt-4">
+        <TabsContent value="gastos" className="mt-4 space-y-4">
+          <TripFuelSection fuelTransactions={fuelTransactions} />
           <TripExpensesSection
             trip={trip}
             expenses={expenses}

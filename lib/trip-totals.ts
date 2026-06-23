@@ -12,7 +12,18 @@ export async function recalculateTripTotals(
 
   if (expError) return { error: expError.message }
 
-  const totalExpenses = (expenses ?? []).reduce((sum, row) => sum + Number(row.amount), 0)
+  const { data: fuelRows, error: fuelError } = await supabase
+    .from('fuel_transactions')
+    .select('amount_total')
+    .eq('trip_id', tripId)
+    .eq('match_status', 'linked')
+    .is('deleted_at', null)
+
+  if (fuelError) return { error: fuelError.message }
+
+  const expenseTotal = (expenses ?? []).reduce((sum, row) => sum + Number(row.amount), 0)
+  const fuelTotal = (fuelRows ?? []).reduce((sum, row) => sum + Number(row.amount_total), 0)
+  const totalExpenses = expenseTotal + fuelTotal
 
   const { data: trip, error: tripError } = await supabase
     .from('trips')

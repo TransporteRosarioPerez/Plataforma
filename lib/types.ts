@@ -167,6 +167,50 @@ export interface TripExpense {
   expenseDate: Date
 }
 
+export type FuelProvider = 'ypf' | 'shell'
+export type FuelProductKind = 'diesel' | 'urea' | 'lubricant' | 'other'
+export type FuelMatchStatus = 'linked' | 'unlinked' | 'ambiguous'
+export type FuelMatchMethod = 'auto' | 'manual'
+export type MatchedPlateRole = 'truck' | 'semi'
+
+export interface FuelImportBatch {
+  id: string
+  provider: FuelProvider
+  fileName: string
+  rowCount: number
+  linkedCount: number
+  unlinkedCount: number
+  skippedDuplicates: number
+  createdAt: Date
+}
+
+export interface FuelTransaction {
+  id: string
+  importBatchId?: string
+  provider: FuelProvider
+  externalId: string
+  transactionAt: Date
+  plate: string
+  stationName?: string
+  product?: string
+  productKind: FuelProductKind
+  liters: number
+  unitPriceNet?: number
+  unitPricePvp?: number
+  amountNet: number
+  amountTaxes: number
+  amountTotal: number
+  ticketNumber?: string
+  driverName?: string
+  cardNumber?: string
+  tripId?: string
+  tripCode?: string
+  matchedPlateRole?: MatchedPlateRole
+  matchStatus: FuelMatchStatus
+  matchMethod?: FuelMatchMethod
+  createdAt: Date
+}
+
 export type InventoryMovementType = 'purchase' | 'consumption' | 'adjustment'
 export type InventoryAdjustmentDirection = 'increase' | 'decrease'
 export type InventoryStockStatus = 'ok' | 'low' | 'out'
