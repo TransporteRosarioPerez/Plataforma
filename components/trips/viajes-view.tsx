@@ -45,8 +45,21 @@ const dateFormatter = new Intl.DateTimeFormat('es-AR', {
   year: '2-digit',
 })
 
-function formatTripDate(date?: Date) {
-  return date ? dateFormatter.format(date) : '—'
+function formatRouteLine(trip: Trip) {
+  const destination = trip.destination?.trim()
+  const origin = trip.origin.trim()
+  if (destination && destination !== origin) {
+    return `${origin} → ${destination}`
+  }
+  return origin || destination || '—'
+}
+
+function formatTripMeta(trip: Trip) {
+  return [
+    formatTripDate(trip.departureDate),
+    trip.driver?.name?.split(' ').slice(0, 2).join(' '),
+    trip.vehicle?.plate,
+  ].filter(Boolean).join(' · ')
 }
 
 type ViajesViewProps = {
@@ -286,21 +299,24 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
             <>
               <div className="[&_[data-slot=table-container]]:overflow-x-hidden">
               <Table className="table-fixed">
+                <colgroup>
+                  <col className="w-[10%]" />
+                  <col className="w-[24%]" />
+                  <col className="w-[36%]" />
+                  <col className="w-[30%]" />
+                </colgroup>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[4.75rem] px-1">Carga</TableHead>
-                    <TableHead className="w-[17%] px-1">Cliente</TableHead>
-                    <TableHead className="px-1">Viaje</TableHead>
-                    <TableHead className="w-[5.25rem] px-1 text-right">Estado</TableHead>
+                    <TableHead className="px-2">Carga</TableHead>
+                    <TableHead className="px-2">Cliente</TableHead>
+                    <TableHead className="px-2">Viaje</TableHead>
+                    <TableHead className="px-2">Estado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pageTrips.map((trip) => {
-                    const metaParts = [
-                      formatTripDate(trip.departureDate),
-                      trip.driver?.name,
-                      trip.vehicle?.plate,
-                    ].filter(Boolean)
+                    const routeLine = formatRouteLine(trip)
+                    const metaLine = formatTripMeta(trip)
 
                     return (
                     <TableRow
@@ -308,38 +324,40 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => router.push(`/app/viajes/${trip.id}`)}
                     >
-                      <TableCell className="max-w-0 whitespace-normal px-1 py-2">
+                      <TableCell className="max-w-0 whitespace-normal px-2 py-2 align-top">
                         <div className="flex items-start gap-1 min-w-0">
                           {trip.pdfStorageKey ? (
                             <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-label="Tiene PDF" />
                           ) : (
                             <span className="w-3.5 shrink-0" aria-hidden />
                           )}
-                          <span className="font-mono text-xs font-medium leading-tight break-all">
+                          <span className="font-mono text-xs font-medium leading-tight truncate" title={trip.code}>
                             {trip.code}
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="max-w-0 whitespace-normal px-1 py-2">
-                        <div className="truncate text-sm font-medium">
+                      <TableCell className="max-w-0 whitespace-normal px-2 py-2 align-top">
+                        <div className="truncate text-sm font-medium" title={trip.client?.name}>
                           {trip.client?.name ?? '—'}
                         </div>
-                      </TableCell>
-                      <TableCell className="max-w-0 whitespace-normal px-1 py-2">
-                        <div
-                          className="truncate text-sm"
-                          title={`${trip.origin} → ${trip.destination ?? '—'}`}
-                        >
-                          {trip.origin} → {trip.destination ?? '—'}
-                        </div>
-                        {metaParts.length > 0 && (
-                          <div className="truncate text-[11px] text-muted-foreground" title={metaParts.join(' · ')}>
-                            {metaParts.join(' · ')}
+                        {trip.client?.accountId && (
+                          <div className="truncate text-[11px] text-muted-foreground">
+                            Cta. {trip.client.accountId}
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="max-w-0 whitespace-normal px-1 py-2 text-right">
-                        <div className="flex flex-col items-end gap-0.5 min-w-0">
+                      <TableCell className="max-w-0 whitespace-normal px-2 py-2 align-top">
+                        <div className="truncate text-sm" title={routeLine}>
+                          {routeLine}
+                        </div>
+                        {metaLine && (
+                          <div className="truncate text-[11px] text-muted-foreground" title={metaLine}>
+                            {metaLine}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="max-w-0 whitespace-normal px-2 py-2 align-top">
+                        <div className="flex flex-col items-start gap-1 min-w-0">
                           <TripStatusBadge status={trip.status} size="sm" compact />
                           <TripEconomicsSummary
                             income={trip.totalIncome}
