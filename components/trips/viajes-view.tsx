@@ -59,7 +59,6 @@ function formatRouteLine(trip: Trip) {
 
 function formatTripMeta(trip: Trip) {
   return [
-    formatTripDate(trip.departureDate),
     trip.driver?.name?.split(' ').slice(0, 2).join(' '),
     trip.vehicle?.plate,
   ].filter(Boolean).join(' · ')
@@ -262,10 +261,11 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
               <div className="[&_[data-slot=table-container]]:overflow-x-hidden">
               <Table className="table-fixed">
                 <colgroup>
-                  <col className="w-[10%]" />
-                  <col className="w-[22%]" />
-                  <col className="w-[34%]" />
-                  <col className="w-[26%]" />
+                  <col className="w-[9%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[28%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[24%]" />
                   <col className="w-[8%]" />
                 </colgroup>
                 <TableHeader>
@@ -273,6 +273,7 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                     <TableHead className="px-2">Carga</TableHead>
                     <TableHead className="px-2">Cliente</TableHead>
                     <TableHead className="px-2">Viaje</TableHead>
+                    <TableHead className="px-2">Fechas</TableHead>
                     <TableHead className="px-2">Estado</TableHead>
                     <TableHead className="px-2 text-center">PDF</TableHead>
                   </TableRow>
@@ -312,6 +313,18 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                             {metaLine}
                           </div>
                         )}
+                      </TableCell>
+                      <TableCell className="max-w-0 whitespace-normal px-2 py-2 align-top">
+                        <div className="space-y-0.5 text-[11px] leading-tight">
+                          <div>
+                            <span className="text-muted-foreground">Carga </span>
+                            <span className="tabular-nums">{formatTripDate(trip.departureDate)}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Entrega </span>
+                            <span className="tabular-nums">{formatTripDate(trip.arrivalDate)}</span>
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell className="max-w-0 whitespace-normal px-2 py-2 align-top">
                         <div className="flex flex-col items-start gap-1 min-w-0">
