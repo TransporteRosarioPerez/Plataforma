@@ -14,6 +14,7 @@ import { recalculateTripTotals } from '@/lib/trip-totals'
 
 export type RestorableEntity =
   | 'client'
+  | 'arcor_client'
   | 'vehicle'
   | 'driver'
   | 'trip'
@@ -29,6 +30,7 @@ export type RestorableEntity =
 
 const TABLE_BY_ENTITY: Record<RestorableEntity, string> = {
   client: 'clients',
+  arcor_client: 'arcor_clients',
   vehicle: 'vehicles',
   driver: 'drivers',
   trip: 'trips',
@@ -50,6 +52,10 @@ function revalidateForEntity(entity: RestorableEntity, extra?: { tripId?: string
     case 'client':
       revalidatePath('/app/clientes')
       revalidatePath('/app/proformas')
+      break
+    case 'arcor_client':
+      revalidatePath('/app/cuentas-viaje')
+      revalidatePath('/app/viajes')
       break
     case 'vehicle':
       revalidatePath('/app/flota')

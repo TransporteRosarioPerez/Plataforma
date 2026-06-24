@@ -7,6 +7,35 @@ import {
   type DashboardPeriod,
 } from '@/lib/dashboard/periods'
 import type { CargoType, Trip, TripStatus, TripType } from '@/lib/types'
+import { TRIP_STATUSES } from '@/lib/types'
+
+export type TripSortColumn =
+  | 'code'
+  | 'client'
+  | 'route'
+  | 'departure'
+  | 'arrival'
+  | 'status'
+  | 'profit'
+  | 'pdf'
+
+export type TripSortDirection = 'asc' | 'desc'
+
+export const DEFAULT_TRIP_SORT: TripSortColumn = 'departure'
+export const DEFAULT_TRIP_SORT_DIR: TripSortDirection = 'desc'
+
+const TRIP_SORT_COLUMNS: TripSortColumn[] = [
+  'code',
+  'client',
+  'route',
+  'departure',
+  'arrival',
+  'status',
+  'profit',
+  'pdf',
+]
+
+const DESC_FIRST_SORT_COLUMNS = new Set<TripSortColumn>(['departure', 'arrival', 'profit'])
 
 export type TripPdfFilter = 'all' | 'yes' | 'no'
 
@@ -41,6 +70,8 @@ export type TripListFilters = {
   dateFrom: string
   dateTo: string
   pdf: TripPdfFilter
+  sort: TripSortColumn
+  sortDir: TripSortDirection
 }
 
 export const DEFAULT_TRIP_LIST_FILTERS: TripListFilters = {
@@ -55,6 +86,8 @@ export const DEFAULT_TRIP_LIST_FILTERS: TripListFilters = {
   dateFrom: '',
   dateTo: '',
   pdf: 'all',
+  sort: DEFAULT_TRIP_SORT,
+  sortDir: DEFAULT_TRIP_SORT_DIR,
 }
 
 function parseEnum<T extends string>(value: string | null, allowed: readonly T[]): T | null {
@@ -128,6 +161,9 @@ export function parseTripListFilters(params: URLSearchParams): TripListFilters {
   else if (quick === 'paid') status = 'paid'
   else if (quick === 'with_pdf') pdf = 'yes'
 
+  const sort = parseEnum(params.get('sort'), TRIP_SORT_COLUMNS) ?? DEFAULT_TRIP_SORT
+  const sortDir = parseEnum(params.get('dir'), ['asc', 'desc'] as const) ?? DEFAULT_TRIP_SORT_DIR
+
   return {
     search: params.get('q') ?? '',
     status,
@@ -140,6 +176,8 @@ export function parseTripListFilters(params: URLSearchParams): TripListFilters {
       'all',
     ...parseDatePeriodFromParams(params),
     pdf,
+    sort,
+    sortDir,
   }
 }
 
@@ -161,6 +199,10 @@ export function buildTripListSearchParams(filters: TripListFilters): URLSearchPa
     }
   }
   if (filters.pdf !== 'all') params.set('pdf', filters.pdf)
+  if (filters.sort !== DEFAULT_TRIP_SORT || filters.sortDir !== DEFAULT_TRIP_SORT_DIR) {
+    params.set('sort', filters.sort)
+    params.set('dir', filters.sortDir)
+  }
 
   return params
 }
@@ -300,4 +342,79 @@ export function hasActiveTripFilters(filters: TripListFilters): boolean {
 
 export function tripSortDate(trip: Trip) {
   return tripListDateValue(trip).getTime()
+}
+
+function compareStrings(a: string, b: string) {
+  return a.localeCompare(b, 'es', { sensitivity: 'base' })
+}
+
+function tripDepartureTime(trip: Trip) {
+  return trip.departureDate?.getTime() ?? trip.createdAt.getTime()
+}
+
+export function getDefaultTripSortDirection(column: TripSortColumn): TripSortDirection {
+  return DESC_FIRST_SORT_COLUMNS.has(column) ? 'desc' : 'asc'
+}
+
+export function toggleTripSort(
+  current: Pick<TripListFilters, 'sort' | 'sortDir'>,
+  column: TripSortColumn
+): Pick<TripListFilters, 'sort' | 'sortDir'> {
+  if (current.sort === column) {
+    return {
+      sort: column,
+      sortDir: current.sortDir === 'asc' ? 'desc' : 'asc',
+    }
+  }
+
+  return {
+    sort: column,
+    sortDir: getDefaultTripSortDirection(column),
+  }
+}
+
+export function sortTrips(
+  trips: Trip[],
+  sort: TripSortColumn,
+  direction: TripSortDirection
+): Trip[] {
+  const dir = direction === 'asc' ? 1 : -1
+
+  return [...trips].sort((a, b) => {
+    let cmp = 0
+
+    switch (sort) {
+      case 'code':
+        cmp = compareStrings(a.code, b.code)
+        break
+      case 'client':
+        cmp = compareStrings(a.client?.name ?? '', b.client?.name ?? '')
+        break
+      case 'route':
+        cmp = compareStrings(formatRouteSortKey(a), formatRouteSortKey(b))
+        break
+      case 'departure':
+        cmp = tripDepartureTime(a) - tripDepartureTime(b)
+        break
+      case 'arrival':
+        cmp = (a.arrivalDate?.getTime() ?? 0) - (b.arrivalDate?.getTime() ?? 0)
+        break
+      case 'status':
+        cmp = TRIP_STATUSES.indexOf(a.status) - TRIP_STATUSES.indexOf(b.status)
+        break
+      case 'profit':
+        cmp = a.profit - b.profit
+        break
+      case 'pdf':
+        cmp = Number(!!a.pdfStorageKey) - Number(!!b.pdfStorageKey)
+        break
+    }
+
+    if (cmp === 0) cmp = compareStrings(a.code, b.code)
+    return cmp * dir
+  })
+}
+
+function formatRouteSortKey(trip: Trip) {
+  return `${trip.origin ?? ''} ${trip.destination ?? ''}`.trim()
 }

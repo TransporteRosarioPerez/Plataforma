@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, FileText } from 'lucide-react'
+import { ArrowLeft, FileText, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,7 +20,9 @@ import { TripEconomicsSummary } from '@/components/trips/trip-economics-summary'
 import { TripEstimateSection } from '@/components/trips/trip-estimate-section'
 import { DownloadPdfButton } from '@/components/trips/download-pdf-button'
 import { UploadPdfDialog } from '@/components/trips/upload-pdf-dialog'
+import { EditTripSheet } from '@/components/trips/edit-trip-sheet'
 import { useRouter } from 'next/navigation'
+import type { ArcorClient, Driver, Vehicle } from '@/lib/types'
 import { toast } from 'sonner'
 
 type TripDetailViewProps = {
@@ -33,6 +35,9 @@ type TripDetailViewProps = {
   fuelTransactions: FuelTransaction[]
   expenseCategories: ExpenseCategory[]
   canViewInvoices?: boolean
+  arcorClients: ArcorClient[]
+  vehicles: Vehicle[]
+  drivers: Driver[]
 }
 
 export function TripDetailView({
@@ -45,10 +50,14 @@ export function TripDetailView({
   fuelTransactions,
   expenseCategories,
   canViewInvoices = false,
+  arcorClients,
+  vehicles,
+  drivers,
 }: TripDetailViewProps) {
   const router = useRouter()
   const [status, setStatus] = useState(trip.status)
   const [showUpload, setShowUpload] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
   const [savingStatus, setSavingStatus] = useState(false)
 
   const tripPdf = documents.find((d) => d.documentType === 'trip_pdf')
@@ -95,6 +104,12 @@ export function TripDetailView({
           </Badge>
         </div>
         <div className="flex items-center gap-2">
+          {!isBillingLocked && (
+            <Button variant="outline" onClick={() => setShowEdit(true)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Editar
+            </Button>
+          )}
           {isBillingLocked ? (
             <span className="text-xs text-muted-foreground max-w-xs text-right">
               {trip.status === 'paid'
@@ -154,6 +169,9 @@ export function TripDetailView({
                     <span className="text-muted-foreground">Pallets / Bultos:</span>{' '}
                     {trip.totalPallets ?? '—'} / {trip.totalPackages ?? '—'}
                   </p>
+                )}
+                {trip.notes && (
+                  <p><span className="text-muted-foreground">Notas:</span> {trip.notes}</p>
                 )}
                 {isBillingLocked && <TripEstimateSection trip={trip} readOnly />}
               </CardContent>
@@ -227,6 +245,17 @@ export function TripDetailView({
       </Tabs>
 
       <UploadPdfDialog tripId={trip.id} open={showUpload} onOpenChange={setShowUpload} />
+
+      {!isBillingLocked && (
+        <EditTripSheet
+          open={showEdit}
+          onOpenChange={setShowEdit}
+          trip={trip}
+          arcorClients={arcorClients}
+          vehicles={vehicles}
+          drivers={drivers}
+        />
+      )}
     </div>
   )
 }

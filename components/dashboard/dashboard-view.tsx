@@ -4,29 +4,41 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import type { DashboardStats } from '@/lib/data/dashboard'
+import type { DashboardSentTrip, DashboardStats } from '@/lib/data/dashboard'
 import { INVENTORY_ENABLED } from '@/lib/features'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
 
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
 
+const dateFormatter = new Intl.DateTimeFormat('es-AR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: '2-digit',
+})
+
 type DashboardViewProps = {
   stats: DashboardStats
+  sentTrips: DashboardSentTrip[]
   canViewReports?: boolean
 }
 
-export function DashboardView({ stats, canViewReports = false }: DashboardViewProps) {
+export function DashboardView({ stats, sentTrips, canViewReports = false }: DashboardViewProps) {
   const operationalKpis = [
     {
       title: 'Viajes registrados',
       value: stats.tripsCount.toString(),
-      description: 'Operación y facturación',
+      description: stats.sentTripsCount > 0
+        ? `${stats.sentTripsCount} enviados`
+        : 'Operación y facturación',
       icon: Route,
       href: '/app/viajes',
       color: 'text-primary',
     },
     {
-      title: 'Clientes',
+      title: 'Clientes facturación',
       value: stats.clientsCount.toString(),
       description: 'Cartera activa',
       icon: Building2,
@@ -109,6 +121,76 @@ export function DashboardView({ stats, canViewReports = false }: DashboardViewPr
           </Link>
         ))}
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <div>
+            <CardTitle>Viajes enviados</CardTitle>
+            <CardDescription>
+              Documentación enviada al cliente, pendientes de facturar
+              {stats.sentTripsCount > 0 && ` · ${stats.sentTripsCount} en total`}
+            </CardDescription>
+          </div>
+          {stats.sentTripsCount > 0 && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/app/viajes?status=sent">
+                Ver todos
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          {sentTrips.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              No hay viajes en estado Enviado.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Carga</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead>Ruta</TableHead>
+                  <TableHead>Fecha carga</TableHead>
+                  <TableHead className="text-right">Ingreso</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sentTrips.map((trip) => {
+                  const route =
+                    trip.destination && trip.destination !== trip.origin
+                      ? `${trip.origin} → ${trip.destination}`
+                      : trip.origin || trip.destination || '—'
+
+                  return (
+                    <TableRow key={trip.id} className="cursor-pointer hover:bg-muted/50">
+                      <TableCell>
+                        <Link href={`/app/viajes/${trip.id}`} className="font-mono text-sm font-medium">
+                          {trip.code}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm font-medium">{trip.clientName}</div>
+                        {trip.accountId && (
+                          <div className="text-xs text-muted-foreground font-mono">Cta. {trip.accountId}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate text-sm">{route}</TableCell>
+                      <TableCell className="text-sm tabular-nums">
+                        {trip.departureDate ? dateFormatter.format(trip.departureDate) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right text-sm tabular-nums">
+                        {trip.totalIncome > 0 ? formatCurrency(trip.totalIncome) : '—'}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

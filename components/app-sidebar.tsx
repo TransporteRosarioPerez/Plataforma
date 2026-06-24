@@ -18,6 +18,7 @@ import {
   Package,
   ArchiveRestore,
   Fuel,
+  MapPin,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -101,7 +102,13 @@ const masterNavItems: NavItem[] = [
     roles: ['superadmin', 'ops'] as const,
   },
   {
-    title: 'Clientes',
+    title: 'Cuentas de viaje',
+    href: '/app/cuentas-viaje',
+    icon: MapPin,
+    roles: ['superadmin', 'ops'] as const,
+  },
+  {
+    title: 'Clientes facturación',
     href: '/app/clientes',
     icon: Building2,
     roles: ['superadmin', 'ops'] as const,

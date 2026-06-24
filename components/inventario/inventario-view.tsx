@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NumberInput } from '@/components/ui/number-input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -349,11 +350,10 @@ export function InventarioView({ items, categories, purchaseTotalMonth }: Invent
           </Field>
           <Field>
             <FieldLabel>Stock mínimo (alerta)</FieldLabel>
-            <Input
+            <NumberInput
               name="min_quantity"
-              type="number"
               min={0}
-              step="any"
+              decimals={2}
               defaultValue={editingItem?.minQuantity ?? 0}
               disabled={itemPending}
             />

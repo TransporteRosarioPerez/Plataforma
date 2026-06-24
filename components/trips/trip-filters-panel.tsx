@@ -24,6 +24,7 @@ import {
   type Driver,
   type Vehicle,
 } from '@/lib/types'
+import { ArcorClientCombobox } from '@/components/clients/arcor-client-combobox'
 import {
   countCustomTripFilters,
   getTripDateRangeLabel,
@@ -70,7 +71,6 @@ export function TripFiltersPanel({
   }
 
   const trucks = vehicles.filter((v) => v.type === 'truck' || v.type === 'semi')
-  const sortedClients = [...clients].sort((a, b) => a.name.localeCompare(b.name, 'es'))
   const sortedDrivers = [...drivers].sort((a, b) => a.name.localeCompare(b.name, 'es'))
   const sortedVehicles = [...trucks].sort((a, b) => a.plate.localeCompare(b.plate, 'es'))
 
@@ -100,23 +100,12 @@ export function TripFiltersPanel({
         <div className="grid gap-4 rounded-lg border bg-muted/20 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           <div className="space-y-2">
             <Label htmlFor="trip-filter-client">Cliente</Label>
-            <Select
+            <ArcorClientCombobox
+              clients={clients}
               value={filters.clientId}
-              onValueChange={(value) => onChange({ clientId: value })}
-            >
-              <SelectTrigger id="trip-filter-client" className="w-full">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los clientes</SelectItem>
-                {sortedClients.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.name}
-                    {client.accountId ? ` (${client.accountId})` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(value) => onChange({ clientId: value })}
+              allowAll
+            />
           </div>
 
           <div className="space-y-2">

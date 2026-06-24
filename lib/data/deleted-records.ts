@@ -11,6 +11,7 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
 
   const [
     clientsRes,
+    arcorClientsRes,
     vehiclesRes,
     driversRes,
     tripsRes,
@@ -27,6 +28,11 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
     supabase
       .from('clients')
       .select('id, name, deleted_at')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false }),
+    supabase
+      .from('arcor_clients')
+      .select('id, name, account_id, deleted_at')
       .not('deleted_at', 'is', null)
       .order('deleted_at', { ascending: false }),
     supabase
@@ -98,6 +104,16 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
       id: row.id,
       entity: 'client',
       label: row.name,
+      deletedAt: new Date(row.deleted_at as string),
+    })
+  }
+
+  for (const row of arcorClientsRes.data ?? []) {
+    const label = row.account_id ? `${row.account_id} — ${row.name}` : row.name
+    rows.push({
+      id: row.id,
+      entity: 'arcor_client',
+      label,
       deletedAt: new Date(row.deleted_at as string),
     })
   }

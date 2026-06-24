@@ -45,7 +45,7 @@ type DbTrip = {
   drivers?: DbDriver | null
 }
 
-function mapTrip(row: DbTrip): Trip {
+function mapTrip(row: DbTrip, observationCount = 0): Trip {
   const arcorClient = row.arcor_clients ? mapClient(row.arcor_clients) : undefined
   return {
     id: row.id,
@@ -83,6 +83,7 @@ function mapTrip(row: DbTrip): Trip {
     totalExpenses: Number(row.total_expenses),
     profit: Number(row.profit),
     notes: row.notes ?? undefined,
+    observationCount,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   }
@@ -96,6 +97,26 @@ const tripSelect = `
   drivers:drivers!trips_driver_id_fkey (*)
 `
 
+async function getObservationCountsByTripIds(tripIds: string[]) {
+  if (tripIds.length === 0) return new Map<string, number>()
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('trip_observations')
+    .select('trip_id')
+    .in('trip_id', tripIds)
+    .is('deleted_at', null)
+
+  if (error) throw new Error(error.message)
+
+  const counts = new Map<string, number>()
+  for (const row of data ?? []) {
+    const tripId = row.trip_id as string
+    counts.set(tripId, (counts.get(tripId) ?? 0) + 1)
+  }
+  return counts
+}
+
 export const getTrips = cache(async () => {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -105,7 +126,10 @@ export const getTrips = cache(async () => {
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(error.message)
-  return (data as DbTrip[]).map(mapTrip)
+
+  const rows = data as DbTrip[]
+  const observationCounts = await getObservationCountsByTripIds(rows.map((row) => row.id))
+  return rows.map((row) => mapTrip(row, observationCounts.get(row.id) ?? 0))
 })
 
 export const getTripById = cache(async (id: string) => {

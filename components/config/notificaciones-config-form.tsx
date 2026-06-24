@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NumberInput } from '@/components/ui/number-input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
@@ -142,12 +143,12 @@ export function NotificacionesConfigForm({
 
             <Field>
               <FieldLabel htmlFor="alert_days_before">Días de anticipación</FieldLabel>
-              <Input
+              <NumberInput
                 id="alert_days_before"
                 name="alert_days_before"
-                type="number"
                 min={1}
                 max={90}
+                decimals={0}
                 defaultValue={alertDays}
                 disabled={pending}
               />

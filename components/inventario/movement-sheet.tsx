@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useMemo, useState } from 'react'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { NumberInput } from '@/components/ui/number-input'
 import { Textarea } from '@/components/ui/textarea'
 import { FormSheet } from '@/components/ui/form-sheet'
 import { Button } from '@/components/ui/button'
@@ -44,8 +45,8 @@ export function MovementSheet({
 
   const [movementType, setMovementType] = useState<InventoryMovementType>(defaultType)
   const [itemId, setItemId] = useState(defaultItemId ?? '')
-  const [quantity, setQuantity] = useState('1')
-  const [unitCost, setUnitCost] = useState('')
+  const [quantity, setQuantity] = useState<number | undefined>(1)
+  const [unitCost, setUnitCost] = useState<number | undefined>(undefined)
   const [adjustmentDirection, setAdjustmentDirection] = useState<'increase' | 'decrease'>('increase')
 
   const [state, formAction, pending] = useActionState(createInventoryMovement, initialState)
@@ -54,14 +55,14 @@ export function MovementSheet({
     if (!open) return
     setMovementType(defaultType)
     setItemId(defaultItemId ?? activeItems[0]?.id ?? '')
-    setQuantity('1')
-    setUnitCost('')
+    setQuantity(1)
+    setUnitCost(undefined)
     setAdjustmentDirection('increase')
   }, [open, defaultItemId, defaultType, activeItems])
 
   const totalCost = useMemo(() => {
-    const q = Number(quantity) || 0
-    const cost = Number(unitCost) || 0
+    const q = quantity ?? 0
+    const cost = unitCost ?? 0
     return q * cost
   }, [quantity, unitCost])
 
@@ -149,13 +150,12 @@ export function MovementSheet({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field>
             <FieldLabel>Cantidad *</FieldLabel>
-            <Input
+            <NumberInput
               name="quantity"
-              type="number"
+              decimals={2}
               min={0.01}
-              step="any"
               value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
+              onValueChange={setQuantity}
               required
               disabled={pending}
             />
@@ -177,13 +177,12 @@ export function MovementSheet({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field>
                 <FieldLabel>Costo unitario *</FieldLabel>
-                <Input
+                <NumberInput
                   name="unit_cost"
-                  type="number"
+                  decimals={2}
                   min={0}
-                  step="0.01"
                   value={unitCost}
-                  onChange={(e) => setUnitCost(e.target.value)}
+                  onValueChange={setUnitCost}
                   required
                   disabled={pending}
                 />

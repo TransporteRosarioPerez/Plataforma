@@ -51,6 +51,12 @@ export const updateTripEstimateSchema = z.object({
   total_pallets: optionalNumber(z.coerce.number().int().min(1)),
 })
 
+export const updateTripSchema = createTripSchema
+  .omit({ status: true })
+  .extend({
+    trip_id: z.string().uuid(),
+  })
+
 export type CreateTripFormData = z.infer<typeof createTripSchema>
 
 export { TRIP_STATUSES, tripStatusSchema }

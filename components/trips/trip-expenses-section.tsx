@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Receipt } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NumberInput } from '@/components/ui/number-input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -219,11 +220,10 @@ export function TripExpensesSection({ trip, expenses, categories }: TripExpenses
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field>
               <FieldLabel>Monto *</FieldLabel>
-              <Input
+              <NumberInput
                 name="amount"
-                type="number"
                 min={0.01}
-                step="0.01"
+                decimals={2}
                 defaultValue={editing?.amount ?? ''}
                 required
                 disabled={pending}

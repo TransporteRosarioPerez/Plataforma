@@ -2,17 +2,18 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus, Search, Route, FileText, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Search, Route, FileText, ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { TripStatusBadge } from '@/components/trip-status-badge'
 import { TripEconomicsSummary } from '@/components/trips/trip-economics-summary'
 import { TripFiltersPanel } from '@/components/trips/trip-filters-panel'
+import { TripSortableHead } from '@/components/trips/trip-sortable-head'
 import { tripStatusLabels } from '@/lib/types'
 import type { Trip, TripStatus, ArcorClient, Vehicle, Driver } from '@/lib/types'
 import { getTripMasterPrerequisites } from '@/lib/trip-prerequisites'
@@ -23,9 +24,11 @@ import {
   getTripDateRangeLabel,
   parseTripListFilters,
   patchTripDatePeriod,
-  tripSortDate,
+  sortTrips,
+  toggleTripSort,
   type TripDatePeriod,
   type TripListFilters,
+  type TripSortColumn,
 } from '@/lib/trips/list-filters'
 import { NewTripSheet } from '@/components/trips/new-trip-sheet'
 
@@ -118,6 +121,10 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
     patchFilters(patchTripDatePeriod(period))
   }
 
+  const applySort = (column: TripSortColumn) => {
+    patchFilters(toggleTripSort(filters, column))
+  }
+
   const clearCustomFilters = () => {
     patchFilters({
       clientId: 'all',
@@ -135,7 +142,7 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
   const dateRangeLabel = getTripDateRangeLabel(filters)
 
   const filtered = useMemo(
-    () => filterTrips(trips, filters).sort((a, b) => tripSortDate(b) - tripSortDate(a)),
+    () => sortTrips(filterTrips(trips, filters), filters.sort, filters.sortDir),
     [trips, filters]
   )
 
@@ -270,12 +277,49 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                 </colgroup>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="px-2">Carga</TableHead>
-                    <TableHead className="px-2">Cliente</TableHead>
-                    <TableHead className="px-2">Viaje</TableHead>
-                    <TableHead className="px-2">Fechas</TableHead>
-                    <TableHead className="px-2">Estado</TableHead>
-                    <TableHead className="px-2 text-center">PDF</TableHead>
+                    <TripSortableHead
+                      label="Carga"
+                      column="code"
+                      activeColumn={filters.sort}
+                      activeDirection={filters.sortDir}
+                      onSort={applySort}
+                    />
+                    <TripSortableHead
+                      label="Cliente"
+                      column="client"
+                      activeColumn={filters.sort}
+                      activeDirection={filters.sortDir}
+                      onSort={applySort}
+                    />
+                    <TripSortableHead
+                      label="Viaje"
+                      column="route"
+                      activeColumn={filters.sort}
+                      activeDirection={filters.sortDir}
+                      onSort={applySort}
+                    />
+                    <TripSortableHead
+                      label="Fechas"
+                      column="departure"
+                      activeColumn={filters.sort}
+                      activeDirection={filters.sortDir}
+                      onSort={applySort}
+                    />
+                    <TripSortableHead
+                      label="Estado"
+                      column="status"
+                      activeColumn={filters.sort}
+                      activeDirection={filters.sortDir}
+                      onSort={applySort}
+                    />
+                    <TripSortableHead
+                      label="PDF"
+                      column="pdf"
+                      activeColumn={filters.sort}
+                      activeDirection={filters.sortDir}
+                      onSort={applySort}
+                      className="text-center"
+                    />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -290,9 +334,24 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                       onClick={() => router.push(`/app/viajes/${trip.id}`)}
                     >
                       <TableCell className="max-w-0 whitespace-normal px-2 py-2 align-top">
-                        <span className="font-mono text-xs font-medium leading-tight truncate block" title={trip.code}>
-                          {trip.code}
-                        </span>
+                        <div className="flex items-start gap-1.5 min-w-0">
+                          <span className="font-mono text-xs font-medium leading-tight truncate" title={trip.code}>
+                            {trip.code}
+                          </span>
+                          {(trip.observationCount ?? 0) > 0 && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                                  <MessageSquare className="h-3 w-3" aria-hidden />
+                                  {trip.observationCount}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {trip.observationCount} observación{(trip.observationCount ?? 0) !== 1 ? 'es' : ''}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="max-w-0 whitespace-normal px-2 py-2 align-top">
                         <div className="truncate text-sm font-medium" title={trip.client?.name}>

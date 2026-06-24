@@ -1,7 +1,8 @@
 import type { RestorableEntity } from '@/lib/actions/restore'
 
 const ENTITY_LABELS: Record<RestorableEntity, string> = {
-  client: 'Cliente',
+  client: 'Cliente de facturación',
+  arcor_client: 'Cuenta de viaje',
   vehicle: 'Vehículo',
   driver: 'Chofer',
   trip: 'Viaje',

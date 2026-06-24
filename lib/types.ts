@@ -383,6 +383,7 @@ export interface Trip {
   profit: number
 
   notes?: string
+  observationCount?: number
   createdAt: Date
   updatedAt: Date
 }

@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { NumberInput } from '@/components/ui/number-input'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { updateTripEstimate } from '@/lib/actions/trips'
 import { getTripEstimatedAmount } from '@/lib/proformas/trip-estimate-amount'
@@ -26,8 +26,8 @@ export function TripEstimateSection({ trip, readOnly }: TripEstimateSectionProps
   const [state, formAction, pending] = useActionState(updateTripEstimate, initialState)
   const estimatedTotal = getTripEstimatedAmount(trip)
 
-  const [unitPrice, setUnitPrice] = useState(trip.unitPrice?.toString() ?? '')
-  const [pallets, setPallets] = useState(trip.totalPallets?.toString() ?? '')
+  const [unitPrice, setUnitPrice] = useState<number | undefined>(trip.unitPrice ?? undefined)
+  const [pallets, setPallets] = useState<number | undefined>(trip.totalPallets ?? undefined)
 
   useEffect(() => {
     if (state.error) toast.error(state.error)
@@ -73,8 +73,8 @@ export function TripEstimateSection({ trip, readOnly }: TripEstimateSectionProps
       formAction={formAction}
       pending={pending}
       estimatedPreview={
-        unitPrice && pallets && Number(unitPrice) > 0 && Number(pallets) > 0
-          ? Number(unitPrice) * Number(pallets)
+        unitPrice != null && pallets != null && unitPrice > 0 && pallets > 0
+          ? unitPrice * pallets
           : null
       }
     />
@@ -92,10 +92,10 @@ function CardEstimateForm({
   estimatedPreview,
 }: {
   tripId: string
-  unitPrice: string
-  pallets: string
-  onUnitPriceChange: (v: string) => void
-  onPalletsChange: (v: string) => void
+  unitPrice: number | undefined
+  pallets: number | undefined
+  onUnitPriceChange: (v: number | undefined) => void
+  onPalletsChange: (v: number | undefined) => void
   formAction: (payload: FormData) => void
   pending: boolean
   estimatedPreview: number | null
@@ -112,25 +112,24 @@ function CardEstimateForm({
       <div className="grid grid-cols-2 gap-2">
         <Field>
           <FieldLabel className="text-xs">Precio/pallet</FieldLabel>
-          <Input
+          <NumberInput
             name="unit_price"
-            type="number"
             min={0}
-            step="0.01"
+            decimals={2}
             value={unitPrice}
-            onChange={(e) => onUnitPriceChange(e.target.value)}
+            onValueChange={onUnitPriceChange}
             disabled={pending}
             placeholder="Opcional"
           />
         </Field>
         <Field>
           <FieldLabel className="text-xs">Pallets</FieldLabel>
-          <Input
+          <NumberInput
             name="total_pallets"
-            type="number"
             min={1}
+            decimals={0}
             value={pallets}
-            onChange={(e) => onPalletsChange(e.target.value)}
+            onValueChange={onPalletsChange}
             disabled={pending}
             placeholder="Opcional"
           />

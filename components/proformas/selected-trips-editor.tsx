@@ -2,7 +2,7 @@
 
 import { Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { NumberInput } from '@/components/ui/number-input'
 import { Field, FieldLabel } from '@/components/ui/field'
 import type { Trip } from '@/lib/types'
 import {
@@ -109,14 +109,13 @@ export function SelectedTripsEditor({
               <div className="grid grid-cols-1 gap-2">
                 <Field>
                   <FieldLabel className="text-xs">Importe neto *</FieldLabel>
-                  <Input
-                    type="number"
+                  <NumberInput
                     min={0}
-                    step="0.01"
+                    decimals={2}
                     required
                     placeholder="0"
                     value={tripLines[trip.id]?.amount ?? ''}
-                    onChange={(e) => onUpdateLine(trip.id, e.target.value)}
+                    onValueChange={(v) => onUpdateLine(trip.id, v !== undefined ? String(v) : '')}
                     disabled={disabled}
                     className="h-9"
                   />

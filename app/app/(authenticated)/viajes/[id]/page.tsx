@@ -1,5 +1,8 @@
 import { notFound } from 'next/navigation'
 import { getTripById } from '@/lib/data/trips'
+import { getArcorClients } from '@/lib/data/arcor-clients'
+import { getVehicles } from '@/lib/data/vehicles'
+import { getDrivers } from '@/lib/data/drivers'
 import { getTripDocuments } from '@/lib/data/trip-documents'
 import { getTripObservations } from '@/lib/data/trip-observations'
 import { getProformasByTripId } from '@/lib/data/proformas'
@@ -19,7 +22,7 @@ export default async function TripDetailPage({
   const { id } = await params
   const session = await getSession()
   const canViewInvoices = session ? canAccessInvoices(session.profile.role) : false
-  const [trip, documents, observations, proformas, invoices, expenses, fuelTransactions, expenseCategories] =
+  const [trip, documents, observations, proformas, invoices, expenses, fuelTransactions, expenseCategories, arcorClients, vehicles, drivers] =
     await Promise.all([
       getTripById(id),
       getTripDocuments(id),
@@ -29,6 +32,9 @@ export default async function TripDetailPage({
       getTripExpensesByTripId(id),
       getFuelTransactionsByTripId(id),
       getExpenseCategories(),
+      getArcorClients(),
+      getVehicles(),
+      getDrivers(),
     ])
 
   if (!trip) notFound()
@@ -44,6 +50,9 @@ export default async function TripDetailPage({
       fuelTransactions={fuelTransactions}
       expenseCategories={expenseCategories}
       canViewInvoices={canViewInvoices}
+      arcorClients={arcorClients}
+      vehicles={vehicles}
+      drivers={drivers}
     />
   )
 }
