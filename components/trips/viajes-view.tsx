@@ -26,7 +26,6 @@ import {
   tripSortDate,
   type TripDatePeriod,
   type TripListFilters,
-  type TripQuickFilter,
 } from '@/lib/trips/list-filters'
 import { NewTripSheet } from '@/components/trips/new-trip-sheet'
 
@@ -112,27 +111,8 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
     syncFilters({ ...filters, ...patch })
   }
 
-  const applyQuickFilter = (next: TripQuickFilter) => {
-    const patch: Partial<TripListFilters> = { quick: next }
-    if (next === 'pending_payment') patch.status = 'pending_payment'
-    else if (next === 'paid') patch.status = 'paid'
-    else if (next === 'with_pdf') {
-      patch.pdf = 'yes'
-    } else if (next === 'all') {
-      patch.status = 'all'
-      patch.pdf = 'all'
-    }
-    patchFilters(patch)
-  }
-
   const applyStatusFilter = (value: TripStatus | 'all') => {
-    const patch: Partial<TripListFilters> = { status: value }
-    if (value !== 'pending_payment' && value !== 'paid') {
-      if (filters.quick === 'pending_payment' || filters.quick === 'paid') {
-        patch.quick = 'all'
-      }
-    }
-    patchFilters(patch)
+    patchFilters({ status: value })
   }
 
   const applyDatePeriod = (period: TripDatePeriod) => {
@@ -150,7 +130,6 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
       dateFrom: '',
       dateTo: '',
       pdf: 'all',
-      quick: filters.quick === 'with_pdf' ? 'all' : filters.quick,
     })
   }
 
@@ -245,27 +224,6 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                   variant={filters.datePeriod === id ? 'secondary' : 'outline'}
                   size="sm"
                   onClick={() => applyDatePeriod(id)}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {(
-                [
-                  { id: 'all' as const, label: 'Todos' },
-                  { id: 'pending_payment' as const, label: 'Pendiente de pago' },
-                  { id: 'paid' as const, label: 'Pagados' },
-                  { id: 'with_pdf' as const, label: 'Con PDF' },
-                ] as const
-              ).map(({ id, label }) => (
-                <Button
-                  key={id}
-                  type="button"
-                  variant={filters.quick === id ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => applyQuickFilter(id)}
                 >
                   {label}
                 </Button>

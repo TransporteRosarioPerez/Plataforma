@@ -8,8 +8,6 @@ import {
 } from '@/lib/dashboard/periods'
 import type { CargoType, Trip, TripStatus, TripType } from '@/lib/types'
 
-export type TripQuickFilter = 'all' | 'pending_payment' | 'paid' | 'with_pdf'
-
 export type TripPdfFilter = 'all' | 'yes' | 'no'
 
 export type TripDatePeriod = 'all' | 'custom' | DashboardPeriod
@@ -34,7 +32,6 @@ export const tripDatePeriodLabels: Record<TripDatePeriod, string> = {
 export type TripListFilters = {
   search: string
   status: TripStatus | 'all'
-  quick: TripQuickFilter
   clientId: string
   driverId: string
   vehicleId: string
@@ -49,7 +46,6 @@ export type TripListFilters = {
 export const DEFAULT_TRIP_LIST_FILTERS: TripListFilters = {
   search: '',
   status: 'all',
-  quick: 'all',
   clientId: 'all',
   driverId: 'all',
   vehicleId: 'all',
@@ -114,7 +110,7 @@ function parseDatePeriodFromParams(params: URLSearchParams): Pick<TripListFilter
 }
 
 export function parseTripListFilters(params: URLSearchParams): TripListFilters {
-  const quick = parseEnum(params.get('quick'), ['all', 'pending_payment', 'paid', 'with_pdf'] as const) ?? 'all'
+  const quick = params.get('quick')
   const statusFromUrl = parseEnum(params.get('status'), [
     'in_progress',
     'delivered',
@@ -135,7 +131,6 @@ export function parseTripListFilters(params: URLSearchParams): TripListFilters {
   return {
     search: params.get('q') ?? '',
     status,
-    quick,
     clientId: params.get('client') ?? 'all',
     driverId: params.get('driver') ?? 'all',
     vehicleId: params.get('vehicle') ?? 'all',
@@ -153,7 +148,6 @@ export function buildTripListSearchParams(filters: TripListFilters): URLSearchPa
 
   if (filters.search.trim()) params.set('q', filters.search.trim())
   if (filters.status !== 'all') params.set('status', filters.status)
-  if (filters.quick !== 'all') params.set('quick', filters.quick)
   if (filters.clientId !== 'all') params.set('client', filters.clientId)
   if (filters.driverId !== 'all') params.set('driver', filters.driverId)
   if (filters.vehicleId !== 'all') params.set('vehicle', filters.vehicleId)
@@ -247,12 +241,6 @@ export function filterTrips(trips: Trip[], filters: TripListFilters): Trip[] {
 
     const matchStatus = filters.status === 'all' || trip.status === filters.status
 
-    const matchQuick =
-      filters.quick === 'all' ||
-      (filters.quick === 'pending_payment' && trip.status === 'pending_payment') ||
-      (filters.quick === 'paid' && trip.status === 'paid') ||
-      (filters.quick === 'with_pdf' && !!trip.pdfStorageKey)
-
     const clientId = trip.arcorClientId ?? trip.clientId
     const matchClient = filters.clientId === 'all' || clientId === filters.clientId
 
@@ -278,7 +266,6 @@ export function filterTrips(trips: Trip[], filters: TripListFilters): Trip[] {
     return (
       matchSearch &&
       matchStatus &&
-      matchQuick &&
       matchClient &&
       matchDriver &&
       matchVehicle &&
@@ -307,7 +294,6 @@ export function hasActiveTripFilters(filters: TripListFilters): boolean {
   return (
     !!filters.search.trim() ||
     filters.status !== 'all' ||
-    filters.quick !== 'all' ||
     countCustomTripFilters(filters) > 0
   )
 }

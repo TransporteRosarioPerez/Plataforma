@@ -208,12 +208,7 @@ export function TripFiltersPanel({
             <Label htmlFor="trip-filter-pdf">PDF del viaje</Label>
             <Select
               value={filters.pdf}
-              onValueChange={(value) =>
-                onChange({
-                  pdf: value as TripListFilters['pdf'],
-                  quick: value === 'yes' ? 'with_pdf' : 'all',
-                })
-              }
+              onValueChange={(value) => onChange({ pdf: value as TripListFilters['pdf'] })}
             >
               <SelectTrigger id="trip-filter-pdf" className="w-full">
                 <SelectValue placeholder="Todos" />
