@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireSuperadmin } from '@/lib/auth/session'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { restoreUpdate } from '@/lib/db/soft-delete'
 import type { ActionState } from '@/lib/validations/parse-form'
 import { getMovementQuantityDelta, wouldStockGoNegative } from '@/lib/inventory/stock'
@@ -105,6 +107,19 @@ function revalidateForEntity(entity: RestorableEntity, extra?: { tripId?: string
   }
 }
 
+async function logRestoreAudit(
+  entity: string,
+  id: string,
+  context?: Record<string, unknown>
+) {
+  await logAudit({
+    action: AUDIT_ACTIONS.restoreRecord,
+    entityId: id,
+    summary: `Recuperó un registro desde la papelera (${entity})`,
+    metadata: { entity, ...context },
+  })
+}
+
 async function restoreProformaRecord(id: string): Promise<ActionState> {
   const supabase = await createClient()
 
@@ -150,6 +165,7 @@ async function restoreProformaRecord(id: string): Promise<ActionState> {
     revalidatePath(`/app/viajes/${tripId}`)
   }
 
+  await logRestoreAudit('proforma', id)
   return { success: 'Proforma recuperada' }
 }
 
@@ -195,6 +211,7 @@ async function restoreInventoryMovement(id: string, itemId?: string): Promise<Ac
   if (updateError) return { error: updateError.message }
 
   revalidateForEntity('inventory_movement', { itemId: resolvedItemId })
+  await logRestoreAudit('inventory_movement', id, { itemId: resolvedItemId })
   return { success: 'Movimiento recuperado' }
 }
 
@@ -218,6 +235,7 @@ async function restoreTripExpense(id: string, tripId?: string): Promise<ActionSt
   if ('error' in totals) return { error: totals.error }
 
   revalidateForEntity('trip_expense', { tripId: resolvedTripId })
+  await logRestoreAudit('trip_expense', id, { tripId: resolvedTripId })
   return { success: 'Gasto recuperado' }
 }
 
@@ -268,6 +286,7 @@ async function restoreInvoiceRecord(id: string): Promise<ActionState> {
     revalidatePath(`/app/viajes/${tripId}`)
   }
 
+  await logRestoreAudit('invoice', id)
   return { success: 'Factura recuperada' }
 }
 
@@ -306,5 +325,8 @@ export async function restoreRecord(
   }
 
   revalidateForEntity(entity, context)
+
+  await logRestoreAudit(entity, id, context)
+
   return { success: 'Registro recuperado' }
 }

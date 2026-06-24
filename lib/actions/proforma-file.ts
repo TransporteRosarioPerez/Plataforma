@@ -5,6 +5,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { createClient } from '@/lib/supabase/server'
 import { requireSession } from '@/lib/auth/session'
 import type { ActionState } from '@/lib/validations/parse-form'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { getSpacesBucket, getSpacesClient } from '@/lib/storage/spaces'
 
 const URL_EXPIRY_SECONDS = 3600
@@ -39,6 +41,12 @@ export async function generateProformaUploadUrl(
       ContentType: 'application/pdf',
     })
     const uploadUrl = await getSignedUrl(client, command, { expiresIn: URL_EXPIRY_SECONDS })
+    await logAudit({
+      action: AUDIT_ACTIONS.proformaUpload,
+      entityType: 'proforma',
+      summary: 'Inició subida de PDF de proforma',
+      metadata: { clientId, fileName },
+    })
     return { success: 'URL generada', uploadUrl, storageKey, contentType: 'application/pdf' }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Error al generar URL de subida' }
@@ -67,6 +75,12 @@ export async function generateProformaDownloadUrl(
     const bucket = getSpacesBucket()
     const command = new GetObjectCommand({ Bucket: bucket, Key: data.file_url })
     const url = await getSignedUrl(client, command, { expiresIn: URL_EXPIRY_SECONDS })
+    await logAudit({
+      action: AUDIT_ACTIONS.proformaDownload,
+      entityType: 'proforma',
+      entityId: proformaId,
+      summary: 'Descargó PDF de proforma',
+    })
     return {
       success: 'URL generada',
       url,

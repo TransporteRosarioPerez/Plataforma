@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { requireSuperadmin } from '@/lib/auth/session'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import type { ActionState } from '@/lib/validations/parse-form'
 import type { UserRole } from '@/lib/types'
 
@@ -23,14 +25,16 @@ export async function updateUserRole(userId: string, role: UserRole): Promise<Ac
 
   const supabase = await createClient()
 
-  if (parsed.data.role !== 'superadmin') {
-    const { data: target } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', parsed.data.userId)
-      .single()
+  const { data: target } = await supabase
+    .from('profiles')
+    .select('role, name, email')
+    .eq('id', parsed.data.userId)
+    .single()
 
-    if (target?.role === 'superadmin') {
+  if (!target) return { error: 'Usuario no encontrado' }
+
+  if (parsed.data.role !== 'superadmin') {
+    if (target.role === 'superadmin') {
       const { count, error: countError } = await supabase
         .from('profiles')
         .select('id', { count: 'exact', head: true })
@@ -49,6 +53,15 @@ export async function updateUserRole(userId: string, role: UserRole): Promise<Ac
     .eq('id', parsed.data.userId)
 
   if (error) return { error: error.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.userRoleUpdate,
+    entityType: 'profile',
+    entityId: parsed.data.userId,
+    entityLabel: target.name,
+    summary: `Cambió el rol de ${target.name} (${target.email}) a ${parsed.data.role}`,
+    metadata: { previousRole: target.role, newRole: parsed.data.role },
+  })
 
   revalidatePath('/app/equipo')
   return { success: 'Rol actualizado' }

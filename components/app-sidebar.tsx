@@ -19,6 +19,7 @@ import {
   ArchiveRestore,
   Fuel,
   MapPin,
+  ScrollText,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -134,6 +135,12 @@ const adminNavItems: NavItem[] = [
     title: 'Equipo',
     href: '/app/equipo',
     icon: Users,
+    roles: ['superadmin'] as const,
+  },
+  {
+    title: 'Auditoría',
+    href: '/app/auditoria',
+    icon: ScrollText,
     roles: ['superadmin'] as const,
   },
   {

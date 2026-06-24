@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { requireSession } from '@/lib/auth/session'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { driverSchema } from '@/lib/validations/drivers'
 
 export async function upsertDriver(
@@ -29,9 +31,23 @@ export async function upsertDriver(
   if (parsed.data.id) {
     const { error } = await supabase.from('drivers').update(row).eq('id', parsed.data.id)
     if (error) return { error: error.message }
+    await logAudit({
+      action: AUDIT_ACTIONS.driverUpsert,
+      entityType: 'driver',
+      entityId: parsed.data.id,
+      entityLabel: row.name,
+      summary: `Actualizó el chofer ${row.name}`,
+    })
   } else {
-    const { error } = await supabase.from('drivers').insert(row)
+    const { data, error } = await supabase.from('drivers').insert(row).select('id').single()
     if (error) return { error: error.message }
+    await logAudit({
+      action: AUDIT_ACTIONS.driverUpsert,
+      entityType: 'driver',
+      entityId: data.id,
+      entityLabel: row.name,
+      summary: `Creó el chofer ${row.name}`,
+    })
   }
 
   revalidatePath('/app/choferes')
@@ -42,8 +58,20 @@ export async function upsertDriver(
 export async function deleteDriver(id: string): Promise<ActionState> {
   await requireSession()
   const supabase = await createClient()
+
+  const { data: driver } = await supabase.from('drivers').select('name').eq('id', id).single()
+
   const { error } = await supabase.from('drivers').update(softDeleteUpdate()).eq('id', id).is('deleted_at', null)
   if (error) return { error: error.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.driverDelete,
+    entityType: 'driver',
+    entityId: id,
+    entityLabel: driver?.name ?? undefined,
+    summary: `Eliminó el chofer ${driver?.name ?? id}`,
+  })
+
   revalidatePath('/app/choferes')
   revalidatePath('/app/viajes')
   revalidatePath('/app/papelera')

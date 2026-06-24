@@ -5,6 +5,8 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { requireSuperadmin } from '@/lib/auth/session'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
 
 const schema = z.object({
@@ -35,14 +37,28 @@ export async function upsertExpenseCategory(
       })
       .eq('id', parsed.data.id)
     if (error) return { error: error.message }
+    await logAudit({
+      action: AUDIT_ACTIONS.expenseCategoryUpsert,
+      entityType: 'expense_category',
+      entityId: parsed.data.id,
+      entityLabel: parsed.data.name,
+      summary: `Actualizó la categoría ${parsed.data.name}`,
+    })
   } else {
-    const { error } = await supabase.from('expense_categories').insert({
+    const { data, error } = await supabase.from('expense_categories').insert({
       code,
       name: parsed.data.name,
       is_default: false,
       is_active: true,
-    })
+    }).select('id').single()
     if (error) return { error: error.message }
+    await logAudit({
+      action: AUDIT_ACTIONS.expenseCategoryUpsert,
+      entityType: 'expense_category',
+      entityId: data.id,
+      entityLabel: parsed.data.name,
+      summary: `Creó la categoría ${parsed.data.name}`,
+    })
   }
 
   revalidatePath('/app/configuracion/gastos')
@@ -57,6 +73,15 @@ export async function toggleExpenseCategory(id: string, isActive: boolean): Prom
     .update({ is_active: isActive })
     .eq('id', id)
   if (error) return { error: error.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.expenseCategoryToggle,
+    entityType: 'expense_category',
+    entityId: id,
+    summary: isActive ? 'Activó una categoría de gasto' : 'Desactivó una categoría de gasto',
+    metadata: { isActive },
+  })
+
   revalidatePath('/app/configuracion/gastos')
   return { success: 'Actualizado' }
 }
@@ -64,12 +89,24 @@ export async function toggleExpenseCategory(id: string, isActive: boolean): Prom
 export async function deleteExpenseCategory(id: string): Promise<ActionState> {
   await requireSuperadmin()
   const supabase = await createClient()
+
+  const { data: category } = await supabase.from('expense_categories').select('name').eq('id', id).single()
+
   const { error } = await supabase
     .from('expense_categories')
     .update(softDeleteUpdate())
     .eq('id', id)
     .is('deleted_at', null)
   if (error) return { error: error.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.expenseCategoryDelete,
+    entityType: 'expense_category',
+    entityId: id,
+    entityLabel: category?.name ?? undefined,
+    summary: `Eliminó la categoría ${category?.name ?? id}`,
+  })
+
   revalidatePath('/app/configuracion/gastos')
   revalidatePath('/app/papelera')
   return { success: 'Categoría dada de baja. Podés recuperarla desde Papelera.' }

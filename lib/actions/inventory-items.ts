@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { requireSession } from '@/lib/auth/session'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { inventoryItemSchema } from '@/lib/validations/inventory-items'
 
 function revalidateInventoryPaths(itemId?: string) {
@@ -37,12 +39,27 @@ export async function upsertInventoryItem(
   if (parsed.data.id) {
     const { error } = await supabase.from('inventory_items').update(row).eq('id', parsed.data.id)
     if (error) return { error: error.message }
+    await logAudit({
+      action: AUDIT_ACTIONS.inventoryItemUpsert,
+      entityType: 'inventory_item',
+      entityId: parsed.data.id,
+      entityLabel: row.name,
+      summary: `Actualizó el ítem ${row.name}`,
+    })
     revalidateInventoryPaths(parsed.data.id)
     return { success: 'Ítem actualizado' }
   }
 
   const { data, error } = await supabase.from('inventory_items').insert(row).select('id').single()
   if (error || !data) return { error: error?.message ?? 'Error al crear ítem' }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.inventoryItemUpsert,
+    entityType: 'inventory_item',
+    entityId: data.id,
+    entityLabel: row.name,
+    summary: `Creó el ítem ${row.name}`,
+  })
 
   revalidateInventoryPaths(data.id)
   return { success: 'Ítem creado' }
@@ -52,12 +69,22 @@ export async function deleteInventoryItem(id: string): Promise<ActionState> {
   await requireSession()
   const supabase = await createClient()
 
+  const { data: item } = await supabase.from('inventory_items').select('name').eq('id', id).single()
+
   const { error } = await supabase
     .from('inventory_items')
     .update(softDeleteUpdate())
     .eq('id', id)
     .is('deleted_at', null)
   if (error) return { error: error.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.inventoryItemDelete,
+    entityType: 'inventory_item',
+    entityId: id,
+    entityLabel: item?.name ?? undefined,
+    summary: `Eliminó el ítem ${item?.name ?? id}`,
+  })
 
   revalidateInventoryPaths()
   revalidatePath('/app/papelera')
@@ -76,6 +103,18 @@ export async function setInventoryItemActive(
     .eq('id', id)
 
   if (error) return { error: error.message }
+
+  const { data: item } = await supabase.from('inventory_items').select('name').eq('id', id).single()
+
+  await logAudit({
+    action: AUDIT_ACTIONS.inventoryItemSetActive,
+    entityType: 'inventory_item',
+    entityId: id,
+    entityLabel: item?.name ?? undefined,
+    summary: isActive ? `Reactivó el ítem ${item?.name ?? id}` : `Desactivó el ítem ${item?.name ?? id}`,
+    metadata: { isActive },
+  })
+
   revalidateInventoryPaths(id)
   return { success: isActive ? 'Ítem reactivado' : 'Ítem desactivado' }
 }

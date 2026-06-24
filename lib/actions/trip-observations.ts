@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { requireSession } from '@/lib/auth/session'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { tripObservationSchema } from '@/lib/validations/trip-observations'
 
 function revalidateTripPaths(tripId: string) {
@@ -54,12 +56,26 @@ export async function upsertTripObservation(
       .is('deleted_at', null)
 
     if (error) return { error: error.message }
+    await logAudit({
+      action: AUDIT_ACTIONS.tripObservationUpsert,
+      entityType: 'trip_observation',
+      entityId: parsed.data.id,
+      summary: 'Actualizó una observación de viaje',
+      metadata: { tripId: parsed.data.trip_id },
+    })
     revalidateTripPaths(parsed.data.trip_id)
     return { success: 'Observación actualizada' }
   }
 
   const { error } = await supabase.from('trip_observations').insert(row)
   if (error) return { error: error.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.tripObservationUpsert,
+    entityType: 'trip',
+    entityId: parsed.data.trip_id,
+    summary: 'Agregó una observación a un viaje',
+  })
 
   revalidateTripPaths(parsed.data.trip_id)
   return { success: 'Observación agregada' }
@@ -80,6 +96,14 @@ export async function deleteTripObservation(id: string, tripId: string): Promise
     .is('deleted_at', null)
 
   if (error) return { error: error.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.tripObservationDelete,
+    entityType: 'trip_observation',
+    entityId: id,
+    summary: 'Eliminó una observación de viaje',
+    metadata: { tripId },
+  })
 
   revalidateTripPaths(tripId)
   return { success: 'Observación dada de baja. Podés recuperarla desde Papelera.' }

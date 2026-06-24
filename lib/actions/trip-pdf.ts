@@ -6,6 +6,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { createClient } from '@/lib/supabase/server'
 import { requireSession } from '@/lib/auth/session'
 import type { ActionState } from '@/lib/validations/parse-form'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { getSpacesBucket, getSpacesClient } from '@/lib/storage/spaces'
 
 const URL_EXPIRY_SECONDS = 3600
@@ -33,6 +35,12 @@ export async function generateTripPdfDownloadUrl(tripId: string): Promise<Action
     const bucket = getSpacesBucket()
     const command = new GetObjectCommand({ Bucket: bucket, Key: key })
     const url = await getSignedUrl(client, command, { expiresIn: URL_EXPIRY_SECONDS })
+    await logAudit({
+      action: AUDIT_ACTIONS.tripPdfDownload,
+      entityType: 'trip',
+      entityId: tripId,
+      summary: 'Descargó el PDF de un viaje',
+    })
     return { success: 'URL generada', url }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Error al generar URL de descarga' }
@@ -63,6 +71,14 @@ export async function generateTripPdfUploadUrl(
       ContentType: 'application/pdf',
     })
     const uploadUrl = await getSignedUrl(client, command, { expiresIn: URL_EXPIRY_SECONDS })
+    await logAudit({
+      action: AUDIT_ACTIONS.tripPdfUpload,
+      entityType: 'trip',
+      entityId: tripId,
+      entityLabel: trip.code,
+      summary: `Inició subida de PDF para el viaje ${trip.code}`,
+      metadata: { fileName },
+    })
     return { success: 'URL de subida generada', uploadUrl, storageKey }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Error al generar URL de subida' }
@@ -73,6 +89,8 @@ export async function registerTripPdf(tripId: string, storageKey: string): Promi
   const session = await requireSession()
   const supabase = await createClient()
   const fileName = storageKey.split('/').pop() ?? storageKey
+
+  const { data: trip } = await supabase.from('trips').select('code').eq('id', tripId).single()
 
   const { error: tripError } = await supabase
     .from('trips')
@@ -111,6 +129,15 @@ export async function registerTripPdf(tripId: string, storageKey: string): Promi
     })
     if (error) return { error: error.message }
   }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.tripPdfRegister,
+    entityType: 'trip',
+    entityId: tripId,
+    entityLabel: trip?.code ?? undefined,
+    summary: `Registró PDF en el viaje ${trip?.code ?? tripId}`,
+    metadata: { fileName },
+  })
 
   revalidatePath(`/app/viajes/${tripId}`)
   return { success: 'PDF registrado' }

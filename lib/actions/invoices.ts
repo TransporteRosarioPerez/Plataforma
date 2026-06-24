@@ -6,6 +6,8 @@ import { requireSuperadmin } from '@/lib/auth/session'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
 import { createInvoiceSchema } from '@/lib/validations/invoices'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { calculateInvoiceAmounts } from '@/lib/invoices/calculate'
 import { applyProformaLineItemsToTrips, loadProformaLineAmounts } from '@/lib/proformas/trip-billing-sync'
 
@@ -64,7 +66,7 @@ export async function createInvoice(
     ? await supabase.from('clients').select('cuit').eq('id', proforma.client_id).maybeSingle()
     : { data: null }
 
-  const { error: insertError } = await supabase.from('invoices').insert({
+  const { data: insertedInvoice, error: insertError } = await supabase.from('invoices').insert({
     invoice_number: parsed.data.invoice_number,
     invoice_type: parsed.data.invoice_type,
     client_id: proforma.client_id,
@@ -79,7 +81,7 @@ export async function createInvoice(
     issue_date: parsed.data.issue_date,
     file_name: parsed.data.file_name || null,
     file_url: parsed.data.file_url || null,
-  })
+  }).select('id').single()
 
   if (insertError) {
     if (insertError.code === '23505') {
@@ -95,6 +97,15 @@ export async function createInvoice(
 
   if (updateProformaError) return { error: updateProformaError.message }
 
+  await logAudit({
+    action: AUDIT_ACTIONS.invoiceCreate,
+    entityType: 'invoice',
+    entityId: insertedInvoice.id,
+    entityLabel: parsed.data.invoice_number,
+    summary: `Creó la factura ${parsed.data.invoice_number}`,
+    metadata: { proformaId: proforma.id },
+  })
+
   revalidateInvoicePaths(proforma.id, tripIds)
   return { success: 'Factura creada' }
 }
@@ -105,7 +116,7 @@ export async function markInvoicePaid(invoiceId: string): Promise<ActionState> {
 
   const { data: invoice, error: fetchError } = await supabase
     .from('invoices')
-    .select('id, status, proforma_id, trip_ids')
+    .select('id, status, proforma_id, trip_ids, invoice_number')
     .eq('id', invoiceId)
     .is('deleted_at', null)
     .single()
@@ -132,6 +143,14 @@ export async function markInvoicePaid(invoiceId: string): Promise<ActionState> {
   const lineItems = await loadProformaLineAmounts(supabase, invoice.proforma_id)
   await applyProformaLineItemsToTrips(supabase, lineItems, 'paid')
 
+  await logAudit({
+    action: AUDIT_ACTIONS.invoiceMarkPaid,
+    entityType: 'invoice',
+    entityId: invoiceId,
+    entityLabel: invoice.invoice_number,
+    summary: `Marcó como cobrada la factura ${invoice.invoice_number}`,
+  })
+
   const tripIds: string[] = invoice.trip_ids ?? []
   revalidateInvoicePaths(invoice.proforma_id, tripIds)
   return { success: 'Factura marcada como cobrada' }
@@ -143,7 +162,7 @@ export async function deleteInvoice(id: string): Promise<ActionState> {
 
   const { data: invoice, error: fetchError } = await supabase
     .from('invoices')
-    .select('id, status, proforma_id, trip_ids')
+    .select('id, status, proforma_id, trip_ids, invoice_number')
     .eq('id', id)
     .is('deleted_at', null)
     .single()
@@ -168,6 +187,14 @@ export async function deleteInvoice(id: string): Promise<ActionState> {
       .eq('id', invoice.proforma_id)
       .eq('status', 'facturada')
   }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.invoiceDelete,
+    entityType: 'invoice',
+    entityId: id,
+    entityLabel: invoice.invoice_number,
+    summary: `Eliminó la factura ${invoice.invoice_number}`,
+  })
 
   const tripIds: string[] = invoice.trip_ids ?? []
   revalidateInvoicePaths(invoice.proforma_id ?? undefined, tripIds)

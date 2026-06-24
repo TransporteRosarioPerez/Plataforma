@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { requireSession } from '@/lib/auth/session'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { updateTripBillingSchema } from '@/lib/validations/trip-billing'
 
 export async function updateTripBilling(
@@ -18,7 +20,7 @@ export async function updateTripBilling(
 
   const { data: trip, error: tripError } = await supabase
     .from('trips')
-    .select('total_expenses, status')
+    .select('total_expenses, status, code')
     .eq('id', parsed.data.trip_id)
     .single()
 
@@ -45,6 +47,15 @@ export async function updateTripBilling(
     .eq('id', parsed.data.trip_id)
 
   if (error) return { error: error.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.tripBillingUpdate,
+    entityType: 'trip',
+    entityId: parsed.data.trip_id,
+    entityLabel: trip.code,
+    summary: `Actualizó facturación del viaje ${trip.code}`,
+    metadata: { totalIncome: parsed.data.total_income },
+  })
 
   revalidatePath('/app/viajes')
   revalidatePath(`/app/viajes/${parsed.data.trip_id}`)

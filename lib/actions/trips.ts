@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/server'
 import { requireSession } from '@/lib/auth/session'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { createTripSchema, updateTripEstimateSchema, updateTripSchema } from '@/lib/validations/trips'
 
 async function validateTripMasters(
@@ -128,10 +130,19 @@ export async function createTrip(
       ...tripRowFromForm(parsed.data),
       metadata: {},
     })
-    .select('id')
+    .select('id, code')
     .single()
 
   if (error) return { error: error.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.tripCreate,
+    entityType: 'trip',
+    entityId: data.id,
+    entityLabel: data.code,
+    summary: `Creó el viaje ${data.code}`,
+    metadata: { status: parsed.data.status },
+  })
 
   revalidatePath('/app/viajes')
   redirect(`/app/viajes/${data.id}`)
@@ -150,7 +161,7 @@ export async function updateTrip(
 
   const { data: existing, error: tripError } = await supabase
     .from('trips')
-    .select('status, arcor_client_id, vehicle_id, trailer_id, driver_id')
+    .select('status, code, arcor_client_id, vehicle_id, trailer_id, driver_id')
     .eq('id', tripId)
     .is('deleted_at', null)
     .single()
@@ -181,6 +192,14 @@ export async function updateTrip(
 
   if (error) return { error: error.message }
 
+  await logAudit({
+    action: AUDIT_ACTIONS.tripUpdate,
+    entityType: 'trip',
+    entityId: tripId,
+    entityLabel: existing.code,
+    summary: `Actualizó el viaje ${existing.code}`,
+  })
+
   revalidatePath('/app/viajes')
   revalidatePath(`/app/viajes/${tripId}`)
   revalidatePath('/app/dashboard')
@@ -204,7 +223,7 @@ export async function updateTripStatus(
 
   const { data: trip, error: tripError } = await supabase
     .from('trips')
-    .select('status')
+    .select('status, code')
     .eq('id', tripId)
     .is('deleted_at', null)
     .single()
@@ -219,6 +238,16 @@ export async function updateTripStatus(
 
   const { error } = await supabase.from('trips').update({ status }).eq('id', tripId)
   if (error) return { error: error.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.tripStatusUpdate,
+    entityType: 'trip',
+    entityId: tripId,
+    entityLabel: trip.code,
+    summary: `Cambió el estado del viaje ${trip.code} a ${status}`,
+    metadata: { from: trip.status, to: status },
+  })
+
   revalidatePath('/app/viajes')
   revalidatePath(`/app/viajes/${tripId}`)
   return { success: 'Estado actualizado' }
@@ -236,7 +265,7 @@ export async function updateTripEstimate(
 
   const { data: trip, error: tripError } = await supabase
     .from('trips')
-    .select('status')
+    .select('status, code')
     .eq('id', parsed.data.trip_id)
     .is('deleted_at', null)
     .single()
@@ -256,6 +285,14 @@ export async function updateTripEstimate(
 
   if (error) return { error: error.message }
 
+  await logAudit({
+    action: AUDIT_ACTIONS.tripEstimateUpdate,
+    entityType: 'trip',
+    entityId: parsed.data.trip_id,
+    entityLabel: trip.code,
+    summary: `Actualizó el estimado del viaje ${trip.code}`,
+  })
+
   revalidatePath('/app/viajes')
   revalidatePath(`/app/viajes/${parsed.data.trip_id}`)
   return { success: 'Estimado actualizado' }
@@ -264,8 +301,20 @@ export async function updateTripEstimate(
 export async function deleteTrip(id: string): Promise<ActionState> {
   await requireSession()
   const supabase = await createClient()
+
+  const { data: trip } = await supabase.from('trips').select('code').eq('id', id).single()
+
   const { error } = await supabase.from('trips').update(softDeleteUpdate()).eq('id', id).is('deleted_at', null)
   if (error) return { error: error.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.tripDelete,
+    entityType: 'trip',
+    entityId: id,
+    entityLabel: trip?.code ?? undefined,
+    summary: `Eliminó el viaje ${trip?.code ?? id}`,
+  })
+
   revalidatePath('/app/viajes')
   revalidatePath('/app/papelera')
   return { success: 'Viaje dado de baja. Podés recuperarlo desde Papelera.' }

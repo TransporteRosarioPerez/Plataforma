@@ -8,6 +8,8 @@ import { createProformaSchema, updateProformaSchema } from '@/lib/validations/pr
 import { OPERATIONAL_TRIP_STATUSES } from '@/lib/types'
 import type { TripStatus } from '@/lib/types'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import {
   applyProformaLineItemsToTrips,
   loadProformaLineAmounts,
@@ -189,6 +191,15 @@ export async function createProforma(
 
   await applyProformaLineItemsToTrips(supabase, lineItems, 'pending_payment')
 
+  await logAudit({
+    action: AUDIT_ACTIONS.proformaCreate,
+    entityType: 'proforma',
+    entityId: proforma.id,
+    entityLabel: parsed.data.proforma_number,
+    summary: `Creó la proforma ${parsed.data.proforma_number} con ${tripIds.length} viaje(s)`,
+    metadata: { tripCount: tripIds.length, clientName: client.name },
+  })
+
   revalidatePath('/app/proformas')
   revalidatePath('/app/viajes')
   revalidatePath('/app/reportes')
@@ -235,6 +246,14 @@ export async function updateProforma(
 
   if (error) return { error: error.message }
 
+  await logAudit({
+    action: AUDIT_ACTIONS.proformaUpdate,
+    entityType: 'proforma',
+    entityId: parsed.data.id,
+    entityLabel: parsed.data.proforma_number,
+    summary: `Actualizó la proforma ${parsed.data.proforma_number}`,
+  })
+
   const tripIds: string[] = existing.trip_ids ?? []
 
   revalidatePath('/app/proformas')
@@ -253,7 +272,7 @@ export async function deleteProforma(id: string): Promise<ActionState> {
 
   const { data: existing } = await supabase
     .from('proformas')
-    .select('trip_ids')
+    .select('trip_ids, proforma_number')
     .eq('id', id)
     .is('deleted_at', null)
     .single()
@@ -281,6 +300,14 @@ export async function deleteProforma(id: string): Promise<ActionState> {
   if (error) return { error: error.message }
 
   await revertTripsAfterProformaRemoved(supabase, tripIdsToRevert)
+
+  await logAudit({
+    action: AUDIT_ACTIONS.proformaDelete,
+    entityType: 'proforma',
+    entityId: id,
+    entityLabel: existing.proforma_number ?? undefined,
+    summary: `Eliminó la proforma ${existing.proforma_number ?? id}`,
+  })
 
   revalidatePath('/app/proformas')
   revalidatePath('/app/viajes')

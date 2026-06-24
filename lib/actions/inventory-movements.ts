@@ -6,6 +6,8 @@ import { requireSession } from '@/lib/auth/session'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
 import { inventoryMovementSchema } from '@/lib/validations/inventory-movements'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { getMovementQuantityDelta, wouldStockGoNegative } from '@/lib/inventory/stock'
 
 function revalidateInventoryPaths(itemId: string) {
@@ -45,7 +47,7 @@ export async function createInventoryMovement(
 
   const { data: item, error: itemError } = await supabase
     .from('inventory_items')
-    .select('id, current_quantity, is_active')
+    .select('id, name, current_quantity, is_active')
     .eq('id', data.item_id)
     .is('deleted_at', null)
     .single()
@@ -86,7 +88,7 @@ export async function createInventoryMovement(
     row.adjustment_direction = data.adjustment_direction
   }
 
-  const { error: insertError } = await supabase.from('inventory_movements').insert(row)
+  const { error: insertError } = await supabase.from('inventory_movements').insert(row).select('id').single()
   if (insertError) return { error: insertError.message }
 
   const { error: updateError } = await supabase
@@ -103,6 +105,15 @@ export async function createInventoryMovement(
     consumption: 'Consumo registrado',
     adjustment: 'Ajuste registrado',
   }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.inventoryMovementCreate,
+    entityType: 'inventory_item',
+    entityId: data.item_id,
+    entityLabel: item.name,
+    summary: `${labels[data.movement_type]} en ${item.name}`,
+    metadata: { movementType: data.movement_type, quantity: data.quantity },
+  })
 
   return { success: labels[data.movement_type] }
 }
@@ -121,7 +132,7 @@ export async function deleteInventoryMovement(id: string, itemId: string): Promi
 
   const { data: item, error: itemError } = await supabase
     .from('inventory_items')
-    .select('current_quantity')
+    .select('name, current_quantity')
     .eq('id', itemId)
     .single()
 
@@ -151,6 +162,14 @@ export async function deleteInventoryMovement(id: string, itemId: string): Promi
     .eq('id', itemId)
 
   if (updateError) return { error: updateError.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.inventoryMovementDelete,
+    entityType: 'inventory_movement',
+    entityId: id,
+    summary: `Eliminó un movimiento de inventario de ${item.name}`,
+    metadata: { itemId },
+  })
 
   revalidateInventoryPaths(itemId)
   revalidatePath('/app/papelera')

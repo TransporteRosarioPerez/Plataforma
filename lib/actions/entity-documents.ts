@@ -9,6 +9,8 @@ import {
   renewEntityDocumentSchema,
 } from '@/lib/validations/entity-documents'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { computeDocumentStatus } from '@/lib/documents/status'
 import { isRenewableFrequency } from '@/lib/documents/renewal'
 import type { RenewalFrequency } from '@/lib/types'
@@ -134,11 +136,27 @@ export async function upsertEntityDocument(
       .update(updatePayload)
       .eq('id', parsed.data.id)
     if (error) return { error: error.message }
+    await logAudit({
+      action: AUDIT_ACTIONS.entityDocumentUpsert,
+      entityType: 'entity_document',
+      entityId: parsed.data.id,
+      entityLabel: parsed.data.name.trim(),
+      summary: `Actualizó el documento ${parsed.data.name.trim()}`,
+      metadata: { entityType: parsed.data.entity_type, entityId: parsed.data.entity_id },
+    })
   } else {
     const groupId = crypto.randomUUID()
     const row = buildDocumentRow(parsed.data, renewalFrequency, groupId, alertDays)
-    const { error } = await supabase.from('entity_documents').insert(row)
+    const { data: inserted, error } = await supabase.from('entity_documents').insert(row).select('id').single()
     if (error) return { error: error.message }
+    await logAudit({
+      action: AUDIT_ACTIONS.entityDocumentUpsert,
+      entityType: 'entity_document',
+      entityId: inserted.id,
+      entityLabel: parsed.data.name.trim(),
+      summary: `Registró el documento ${parsed.data.name.trim()}`,
+      metadata: { entityType: parsed.data.entity_type, entityId: parsed.data.entity_id },
+    })
   }
 
   revalidateEntityPaths(parsed.data.entity_type, parsed.data.entity_id)
@@ -189,6 +207,15 @@ export async function renewEntityDocument(
   const { error: insertError } = await supabase.from('entity_documents').insert(row)
   if (insertError) return { error: insertError.message }
 
+  await logAudit({
+    action: AUDIT_ACTIONS.entityDocumentRenew,
+    entityType: 'entity_document',
+    entityId: current.id,
+    entityLabel: current.name as string,
+    summary: `Renovó el documento ${current.name}`,
+    metadata: { entityType: parsed.data.entity_type, entityId: parsed.data.entity_id },
+  })
+
   revalidateEntityPaths(parsed.data.entity_type, parsed.data.entity_id)
   return { success: 'Renovación registrada. La versión anterior quedó en el historial.' }
 }
@@ -203,7 +230,7 @@ export async function deleteEntityDocument(
 
   const { data: doc } = await supabase
     .from('entity_documents')
-    .select('is_current')
+    .select('is_current, name')
     .eq('id', id)
     .single()
 
@@ -217,6 +244,15 @@ export async function deleteEntityDocument(
     .eq('id', id)
     .is('deleted_at', null)
   if (error) return { error: error.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.entityDocumentDelete,
+    entityType: 'entity_document',
+    entityId: id,
+    entityLabel: doc?.name ?? undefined,
+    summary: `Eliminó el documento ${doc?.name ?? id}`,
+    metadata: { entityType, entityId },
+  })
 
   revalidateEntityPaths(entityType, entityId)
   revalidatePath('/app/papelera')

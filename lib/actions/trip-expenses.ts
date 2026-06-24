@@ -6,6 +6,8 @@ import { requireSession } from '@/lib/auth/session'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
 import { tripExpenseSchema } from '@/lib/validations/trip-expenses'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { recalculateTripTotals } from '@/lib/trip-totals'
 
 function revalidateTripPaths(tripId: string) {
@@ -55,6 +57,14 @@ export async function upsertTripExpense(
   const totals = await recalculateTripTotals(supabase, parsed.data.trip_id)
   if ('error' in totals) return { error: totals.error }
 
+  await logAudit({
+    action: AUDIT_ACTIONS.tripExpenseUpsert,
+    entityType: 'trip_expense',
+    entityId: parsed.data.id,
+    summary: parsed.data.id ? 'Actualizó un gasto de viaje' : 'Registró un gasto de viaje',
+    metadata: { tripId: parsed.data.trip_id, amount: parsed.data.amount, category: category.name },
+  })
+
   revalidateTripPaths(parsed.data.trip_id)
   return { success: parsed.data.id ? 'Gasto actualizado' : 'Gasto registrado' }
 }
@@ -72,6 +82,14 @@ export async function deleteTripExpense(id: string, tripId: string): Promise<Act
 
   const totals = await recalculateTripTotals(supabase, tripId)
   if ('error' in totals) return { error: totals.error }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.tripExpenseDelete,
+    entityType: 'trip_expense',
+    entityId: id,
+    summary: 'Eliminó un gasto de viaje',
+    metadata: { tripId },
+  })
 
   revalidateTripPaths(tripId)
   revalidatePath('/app/papelera')

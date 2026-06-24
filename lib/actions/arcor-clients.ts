@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { requireSession } from '@/lib/auth/session'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { arcorClientSchema } from '@/lib/validations/arcor-clients'
 
 async function accountIdTaken(
@@ -49,9 +51,23 @@ export async function upsertArcorClient(
   if (parsed.data.id) {
     const { error } = await supabase.from('arcor_clients').update(row).eq('id', parsed.data.id)
     if (error) return { error: error.message }
+    await logAudit({
+      action: AUDIT_ACTIONS.arcorClientUpsert,
+      entityType: 'arcor_client',
+      entityId: parsed.data.id,
+      entityLabel: row.name,
+      summary: `Actualizó la cuenta de viaje ${row.name}`,
+    })
   } else {
-    const { error } = await supabase.from('arcor_clients').insert(row)
+    const { data, error } = await supabase.from('arcor_clients').insert(row).select('id').single()
     if (error) return { error: error.message }
+    await logAudit({
+      action: AUDIT_ACTIONS.arcorClientUpsert,
+      entityType: 'arcor_client',
+      entityId: data.id,
+      entityLabel: row.name,
+      summary: `Creó la cuenta de viaje ${row.name}`,
+    })
   }
 
   revalidatePath('/app/cuentas-viaje')
@@ -62,6 +78,9 @@ export async function upsertArcorClient(
 export async function deleteArcorClient(id: string): Promise<ActionState> {
   await requireSession()
   const supabase = await createClient()
+
+  const { data: client } = await supabase.from('arcor_clients').select('name').eq('id', id).single()
+
   const { error } = await supabase
     .from('arcor_clients')
     .update(softDeleteUpdate())
@@ -69,6 +88,14 @@ export async function deleteArcorClient(id: string): Promise<ActionState> {
     .is('deleted_at', null)
 
   if (error) return { error: error.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.arcorClientDelete,
+    entityType: 'arcor_client',
+    entityId: id,
+    entityLabel: client?.name ?? undefined,
+    summary: `Eliminó la cuenta de viaje ${client?.name ?? id}`,
+  })
 
   revalidatePath('/app/cuentas-viaje')
   revalidatePath('/app/viajes')

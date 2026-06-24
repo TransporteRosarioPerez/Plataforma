@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { requireSession } from '@/lib/auth/session'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
 import { parseForm, type ActionState } from '@/lib/validations/parse-form'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { vehicleSchema } from '@/lib/validations/vehicles'
 
 export async function upsertVehicle(
@@ -28,9 +30,23 @@ export async function upsertVehicle(
   if (parsed.data.id) {
     const { error } = await supabase.from('vehicles').update(row).eq('id', parsed.data.id)
     if (error) return { error: error.message }
+    await logAudit({
+      action: AUDIT_ACTIONS.vehicleUpsert,
+      entityType: 'vehicle',
+      entityId: parsed.data.id,
+      entityLabel: row.plate,
+      summary: `Actualizó el vehículo ${row.plate}`,
+    })
   } else {
-    const { error } = await supabase.from('vehicles').insert(row)
+    const { data, error } = await supabase.from('vehicles').insert(row).select('id').single()
     if (error) return { error: error.message }
+    await logAudit({
+      action: AUDIT_ACTIONS.vehicleUpsert,
+      entityType: 'vehicle',
+      entityId: data.id,
+      entityLabel: row.plate,
+      summary: `Creó el vehículo ${row.plate}`,
+    })
   }
 
   revalidatePath('/app/flota')
@@ -41,8 +57,20 @@ export async function upsertVehicle(
 export async function deleteVehicle(id: string): Promise<ActionState> {
   await requireSession()
   const supabase = await createClient()
+
+  const { data: vehicle } = await supabase.from('vehicles').select('plate').eq('id', id).single()
+
   const { error } = await supabase.from('vehicles').update(softDeleteUpdate()).eq('id', id).is('deleted_at', null)
   if (error) return { error: error.message }
+
+  await logAudit({
+    action: AUDIT_ACTIONS.vehicleDelete,
+    entityType: 'vehicle',
+    entityId: id,
+    entityLabel: vehicle?.plate ?? undefined,
+    summary: `Eliminó el vehículo ${vehicle?.plate ?? id}`,
+  })
+
   revalidatePath('/app/flota')
   revalidatePath('/app/viajes')
   revalidatePath('/app/papelera')

@@ -13,6 +13,8 @@ import {
 import { recalculateTripTotals } from '@/lib/trip-totals'
 import { softDeleteUpdate } from '@/lib/db/soft-delete'
 import type { ActionState } from '@/lib/validations/parse-form'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import type { FuelMatchStatus } from '@/lib/types'
 
 function revalidateFuelPaths(tripId?: string) {
@@ -83,6 +85,12 @@ export async function previewFuelImport(
       previewRows.push({ ...row, match })
     }
 
+    await logAudit({
+      action: AUDIT_ACTIONS.fuelImportPreview,
+      summary: `Vista previa de importación de combustible (${fileName})`,
+      metadata: { fileName, rowCount: previewRows.length },
+    })
+
     return {
       preview: {
         provider: parsed.provider,
@@ -145,6 +153,13 @@ export async function confirmFuelImport(
   }
 
   revalidateFuelPaths()
+  await logAudit({
+    action: AUDIT_ACTIONS.fuelImportConfirm,
+    entityType: 'fuel_transaction',
+    entityId: batch.id,
+    summary: `Importó ${preview.rows.length} cargas de combustible`,
+    metadata: { fileName, linked: linkedCount, unlinked: unlinkedCount },
+  })
   return {
     success: `Importadas ${preview.rows.length} cargas (${linkedCount} vinculadas, ${unlinkedCount} sin viaje)`,
     imported: preview.rows.length,
@@ -214,6 +229,15 @@ export async function linkFuelToTrip(
 
   revalidateFuelPaths(tripId)
   if (previousTripId && previousTripId !== tripId) revalidateFuelPaths(previousTripId)
+
+  await logAudit({
+    action: AUDIT_ACTIONS.fuelLinkTrip,
+    entityType: 'fuel_transaction',
+    entityId: fuelTransactionId,
+    summary: 'Vinculó una carga de combustible a un viaje',
+    metadata: { tripId, previousTripId },
+  })
+
   return { success: 'Carga vinculada al viaje' }
 }
 
@@ -240,6 +264,15 @@ export async function deleteFuelTransaction(id: string): Promise<ActionState> {
   if (error) return { error: error.message }
 
   if (tripId) await recalculateTripTotals(supabase, tripId)
+
+  await logAudit({
+    action: AUDIT_ACTIONS.fuelDelete,
+    entityType: 'fuel_transaction',
+    entityId: id,
+    summary: 'Eliminó una transacción de combustible',
+    metadata: { tripId },
+  })
+
   revalidateFuelPaths(tripId ?? undefined)
   revalidatePath('/app/papelera')
   return { success: 'Carga eliminada' }

@@ -4,6 +4,8 @@ import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { requireSession } from '@/lib/auth/session'
 import type { ActionState } from '@/lib/validations/parse-form'
+import { AUDIT_ACTIONS } from '@/lib/audit/actions'
+import { logAudit } from '@/lib/audit/log'
 import { getSpacesBucket, getSpacesClient } from '@/lib/storage/spaces'
 import type { DocumentEntityType } from '@/lib/types'
 
@@ -55,6 +57,12 @@ export async function generateEntityDocumentUploadUrl(
       ContentType: contentType,
     })
     const uploadUrl = await getSignedUrl(client, command, { expiresIn: URL_EXPIRY_SECONDS })
+    await logAudit({
+      action: AUDIT_ACTIONS.entityDocumentUpload,
+      entityType: 'entity_document',
+      summary: 'Inició subida de documento de entidad',
+      metadata: { entityType, entityId, fileName },
+    })
     return { success: 'URL de subida generada', uploadUrl, storageKey, contentType }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Error al generar URL de subida' }
@@ -72,6 +80,11 @@ export async function generateEntityDocumentDownloadUrl(
     const bucket = getSpacesBucket()
     const command = new GetObjectCommand({ Bucket: bucket, Key: storageKey })
     const url = await getSignedUrl(client, command, { expiresIn: URL_EXPIRY_SECONDS })
+    await logAudit({
+      action: AUDIT_ACTIONS.entityDocumentDownload,
+      entityType: 'entity_document',
+      summary: 'Descargó documento de entidad',
+    })
     return { success: 'URL generada', url }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Error al generar URL de descarga' }
