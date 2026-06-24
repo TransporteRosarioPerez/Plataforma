@@ -12,6 +12,10 @@ import { toast } from 'sonner'
 
 const initialState: ActionState = {}
 
+function resolveTripClientId(trip: Trip) {
+  return trip.arcorClientId ?? trip.clientId ?? trip.client?.id ?? trip.arcorClient?.id ?? ''
+}
+
 type EditTripSheetProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -31,12 +35,12 @@ export function EditTripSheet({
 }: EditTripSheetProps) {
   const router = useRouter()
   const [state, formAction, pending] = useActionState(updateTrip, initialState)
-  const [clientId, setClientId] = useState(trip.arcorClientId ?? trip.client?.id ?? '')
+  const [clientId, setClientId] = useState(() => resolveTripClientId(trip))
 
   useEffect(() => {
     if (!open) return
-    setClientId(trip.arcorClientId ?? trip.client?.id ?? '')
-  }, [open, trip.arcorClientId, trip.client?.id])
+    setClientId(resolveTripClientId(trip))
+  }, [open, trip])
 
   useEffect(() => {
     if (state.error) toast.error(state.error)

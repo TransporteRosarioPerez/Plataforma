@@ -38,6 +38,7 @@ type ArcorClientComboboxProps = {
   name?: string
   allowAll?: boolean
   allLabel?: string
+  autoSelectDefault?: boolean
 }
 
 export function ArcorClientCombobox({
@@ -48,19 +49,20 @@ export function ArcorClientCombobox({
   name = 'client_id',
   allowAll = false,
   allLabel = 'Todos los clientes',
+  autoSelectDefault = true,
 }: ArcorClientComboboxProps) {
   const [open, setOpen] = useState(false)
   const sortedClients = useMemo(() => sortArcorClients(clients), [clients])
 
   useEffect(() => {
-    if (allowAll || value || clients.length === 0) return
+    if (!autoSelectDefault || allowAll || value || clients.length === 0) return
     const stored = localStorage.getItem(LAST_ARCOR_CLIENT_KEY)
     if (stored && clients.some((c) => c.id === stored)) {
       onChange(stored)
       return
     }
     onChange(clients[0].id)
-  }, [allowAll, clients, value, onChange])
+  }, [autoSelectDefault, allowAll, clients, value, onChange])
 
   useEffect(() => {
     if (!allowAll && value && value !== 'all') {

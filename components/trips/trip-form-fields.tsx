@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { Input } from '@/components/ui/input'
 import { NumberInput } from '@/components/ui/number-input'
 import { Textarea } from '@/components/ui/textarea'
@@ -20,6 +21,18 @@ function includeCurrent<T extends { id: string }>(items: T[], allItems: T[], cur
   if (!currentId || items.some((item) => item.id === currentId)) return items
   const current = allItems.find((item) => item.id === currentId)
   return current ? [current, ...items] : items
+}
+
+function includeLinkedClient(clients: ArcorClient[], trip?: Trip) {
+  const linked = trip?.client ?? trip?.arcorClient
+  if (!linked?.id) return clients
+  if (clients.some((client) => client.id === linked.id)) return clients
+  return [linked, ...clients]
+}
+
+function resolveTripClientId(trip?: Trip) {
+  if (!trip) return ''
+  return trip.arcorClientId ?? trip.clientId ?? trip.client?.id ?? trip.arcorClient?.id ?? ''
 }
 
 type TripFormFieldsProps = {
@@ -43,7 +56,12 @@ export function TripFormFields({
   onClientIdChange,
   disabled,
 }: TripFormFieldsProps) {
-  const selectedClient = arcorClients.find((c) => c.id === clientId)
+  const clientOptions = useMemo(
+    () => includeLinkedClient(arcorClients, trip),
+    [arcorClients, trip]
+  )
+  const effectiveClientId = clientId || resolveTripClientId(trip)
+  const selectedClient = clientOptions.find((c) => c.id === effectiveClientId)
 
   const trucks = includeCurrent(
     vehicles.filter((v) => v.type === 'truck' && v.status === 'active'),
@@ -74,10 +92,11 @@ export function TripFormFields({
         <Field>
           <FieldLabel>Cliente *</FieldLabel>
           <ArcorClientCombobox
-            clients={arcorClients}
-            value={clientId}
+            clients={clientOptions}
+            value={effectiveClientId}
             onChange={onClientIdChange}
             disabled={disabled}
+            autoSelectDefault={mode === 'create'}
           />
           <p className="text-xs text-muted-foreground mt-1">
             Catálogo operativo del viaje. Para cobrar, usá tus clientes en Proformas.
