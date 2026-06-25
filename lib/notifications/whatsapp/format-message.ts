@@ -1,12 +1,7 @@
 import { APP_NAME } from '@/lib/brand'
 import type { DocumentAlertItem } from '@/lib/notifications/types'
 import { entityTypeLabels, entityTypeOrder, groupByEntityType } from '@/lib/documents/entity-labels'
-
-const dateFormatter = new Intl.DateTimeFormat('es-AR', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-})
+import { formatDateOnlyDisplay, parseDateOnly } from '@/lib/documents/dates'
 
 function formatAlertLine(alert: DocumentAlertItem): string {
   const entity =
@@ -17,7 +12,9 @@ function formatAlertLine(alert: DocumentAlertItem): string {
         : alert.entityLabel
 
   const expiry =
-    alert.expiryDate != null ? dateFormatter.format(new Date(alert.expiryDate)) : 'sin fecha'
+    alert.expiryDate != null
+      ? formatDateOnlyDisplay(parseDateOnly(alert.expiryDate))
+      : 'sin fecha'
 
   let timing: string
   if (alert.daysUntilExpiry != null) {

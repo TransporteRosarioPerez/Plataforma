@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
-import { validateIssueBeforeExpiry } from '@/lib/documents/dates'
+import { validateIssueBeforeExpiry, formatDateOnlyInput } from '@/lib/documents/dates'
 import type { DocumentRecord } from '@/lib/types'
 
 export const ACCEPTED_DOCUMENT_FILES = '.pdf,.jpg,.jpeg,.png'
@@ -19,7 +19,7 @@ type DocumentDateFileFieldsProps = {
 }
 
 function toDateInputValue(date?: Date) {
-  return date?.toISOString().slice(0, 10) ?? ''
+  return date ? formatDateOnlyInput(date) : ''
 }
 
 export function DocumentDateFileFields({

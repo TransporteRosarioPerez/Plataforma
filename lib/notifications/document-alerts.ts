@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { computeDocumentStatus, daysUntilExpiry } from '@/lib/documents/status'
+import { parseDateOnly } from '@/lib/documents/dates'
 import type { DbCompanySettings } from '@/lib/db/mappers'
 import { shouldNotifyDocument } from '@/lib/notifications/alert-milestones'
 import { getWhatsAppConfig, getWhatsAppProviderStatus } from '@/lib/notifications/whatsapp/config'
@@ -30,7 +31,7 @@ export async function refreshDocumentStatuses(supabase: ReturnType<typeof create
   const alertDays = company?.alert_days_before ?? 7
 
   for (const doc of docs ?? []) {
-    const expiryDate = doc.expiry_date ? new Date(doc.expiry_date as string) : null
+    const expiryDate = doc.expiry_date ? parseDateOnly(doc.expiry_date as string) : null
     const status = computeDocumentStatus(expiryDate, alertDays)
 
     await supabase.from('entity_documents').update({ status }).eq('id', doc.id)
@@ -96,7 +97,7 @@ export async function sendDocumentAlerts(): Promise<SendDocumentAlertsResult> {
     const expiryDateStr = doc.expiry_date as string | null
     if (!expiryDateStr) continue
 
-    const expiryDate = new Date(expiryDateStr)
+    const expiryDate = parseDateOnly(expiryDateStr)
     const daysLeft = daysUntilExpiry(expiryDate)
 
     const { notify, milestone } = await shouldNotifyDocument(

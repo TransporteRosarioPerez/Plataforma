@@ -16,11 +16,32 @@ export function validateIssueBeforeExpiry(
   return null
 }
 
-const expiryDateFormatter = new Intl.DateTimeFormat('es-AR', {
+/** Parsea YYYY-MM-DD como fecha local (sin desfase UTC). */
+export function parseDateOnly(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+/** Formato YYYY-MM-DD para inputs type="date". */
+export function formatDateOnlyInput(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+const dateOnlyDisplayFormatter = new Intl.DateTimeFormat('es-AR', {
   day: '2-digit',
   month: '2-digit',
   year: 'numeric',
 })
+
+/** Formato legible dd/mm/yyyy en hora local. */
+export function formatDateOnlyDisplay(date: Date): string {
+  return dateOnlyDisplayFormatter.format(date)
+}
+
+const expiryDateFormatter = dateOnlyDisplayFormatter
 
 export function formatExpiryTiming(daysUntilExpiry?: number): string {
   if (daysUntilExpiry == null) return ''

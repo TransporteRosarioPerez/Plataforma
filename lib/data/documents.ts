@@ -3,6 +3,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import type { DocumentRecord, DocumentEntityType, RenewalFrequency } from '@/lib/types'
 import { computeDocumentStatus, daysUntilExpiry } from '@/lib/documents/status'
+import { parseDateOnly } from '@/lib/documents/dates'
 
 type DbEntityDocument = {
   id: string
@@ -45,8 +46,8 @@ function mapEntityDocument(row: DbEntityDocument): DocumentRecord {
     entityType: row.entity_type,
     fileName: row.file_name ?? undefined,
     fileUrl: row.file_url ?? undefined,
-    issueDate: row.issue_date ? new Date(row.issue_date) : undefined,
-    expiryDate: row.expiry_date ? new Date(row.expiry_date) : undefined,
+    issueDate: row.issue_date ? parseDateOnly(row.issue_date) : undefined,
+    expiryDate: row.expiry_date ? parseDateOnly(row.expiry_date) : undefined,
     status: row.status,
     uploadedAt: row.uploaded_at ? new Date(row.uploaded_at) : undefined,
     notes: row.notes ?? undefined,
@@ -117,7 +118,7 @@ export const getExpiringDocuments = cache(async (): Promise<ExpiringDocumentsRes
   const rows = (docsRes.data as DbEntityDocument[] ?? [])
     .filter((row) => row.renewal_frequency !== 'once')
     .map((row) => {
-      const expiryDate = row.expiry_date ? new Date(row.expiry_date) : undefined
+      const expiryDate = row.expiry_date ? parseDateOnly(row.expiry_date) : undefined
       const status = expiryDate ? computeDocumentStatus(expiryDate, alertDays) : row.status
 
       let entityLabel = row.entity_id

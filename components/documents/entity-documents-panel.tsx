@@ -37,16 +37,18 @@ import {
   isRenewableFrequency,
   renewalFrequencyLabels,
 } from '@/lib/documents/renewal'
-import { validateIssueBeforeExpiry } from '@/lib/documents/dates'
+import { validateIssueBeforeExpiry, formatDateOnlyDisplay } from '@/lib/documents/dates'
 import { appendUploadedFileToFormData } from '@/lib/documents/upload-entity-file'
 import type { DocumentRecord, DocumentEntityType, RenewalFrequency } from '@/lib/types'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 
-const dateFormatter = new Intl.DateTimeFormat('es-AR', {
+const dateTimeFormatter = new Intl.DateTimeFormat('es-AR', {
   day: '2-digit',
   month: '2-digit',
   year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
 })
 
 type RenewalMode = 'once' | 'interval'
@@ -163,10 +165,15 @@ export function EntityDocumentsPanel({
 
   const handleEdit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!editing) return
     setPending(true)
     try {
       const formData = new FormData(e.currentTarget)
-      formData.set('renewal_mode', 'once')
+      const renewable = isRenewableFrequency(editing.renewalFrequency)
+      formData.set('renewal_mode', renewable ? 'interval' : 'once')
+      if (renewable) {
+        formData.set('renewal_frequency', editing.renewalFrequency)
+      }
       if (!validateFormDates(formData)) return
       if (!(await uploadFileIfNeeded(formData))) return
       const result = await upsertEntityDocument({}, formData)
@@ -218,11 +225,11 @@ export function EntityDocumentsPanel({
           <span className="inline-flex items-center gap-1">
             <History className="h-3 w-3" />
             Anterior
-            {row.supersededAt ? ` · ${dateFormatter.format(row.supersededAt)}` : ''}
+            {row.supersededAt ? ` · ${dateTimeFormatter.format(row.supersededAt)}` : ''}
           </span>
         </TableCell>
         <TableCell className="whitespace-nowrap text-sm">
-          {row.expiryDate ? dateFormatter.format(row.expiryDate) : '—'}
+          {row.expiryDate ? formatDateOnlyDisplay(row.expiryDate) : '—'}
         </TableCell>
         <TableCell>
           <Badge variant="outline" className={documentStatusColors[row.status]}>
@@ -294,7 +301,7 @@ export function EntityDocumentsPanel({
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           {isRenewableFrequency(doc.renewalFrequency) && doc.expiryDate
-                            ? dateFormatter.format(doc.expiryDate)
+                            ? formatDateOnlyDisplay(doc.expiryDate)
                             : '—'}
                         </TableCell>
                         <TableCell>
@@ -336,15 +343,14 @@ export function EntityDocumentsPanel({
                                 )}
                               </Button>
                             )}
-                            {renewable ? (
+                            {renewable && (
                               <Button variant="ghost" size="icon" onClick={() => openRenew(doc)} title="Renovar">
                                 <RefreshCw className="h-4 w-4" />
                               </Button>
-                            ) : (
-                              <Button variant="ghost" size="icon" onClick={() => openEdit(doc)}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
                             )}
+                            <Button variant="ghost" size="icon" onClick={() => openEdit(doc)} title="Editar">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -419,7 +425,11 @@ export function EntityDocumentsPanel({
         onOpenChange={setEditOpen}
         size="default"
         title={editing ? `Editar ${editing.name}` : 'Editar documento'}
-        description="Documento único — se actualiza sin historial de versiones."
+        description={
+          editing && isRenewableFrequency(editing.renewalFrequency)
+            ? 'Corregí fechas, archivo o notas del documento vigente. Para una nueva versión con historial, usá Renovar.'
+            : 'Documento único — actualizá datos o archivo sin historial de versiones.'
+        }
         footer={
           editing ? (
             <div className="flex w-full gap-2">
@@ -444,12 +454,22 @@ export function EntityDocumentsPanel({
               <Input name="name" defaultValue={editing.name} required disabled={pending} />
             </Field>
 
+            {isRenewableFrequency(editing.renewalFrequency) && (
+              <p className="text-sm text-muted-foreground">
+                Renovación:{' '}
+                <Badge variant="secondary" className="font-normal">
+                  {renewalFrequencyLabels[editing.renewalFrequency]}
+                </Badge>
+              </p>
+            )}
+
             <DocumentDateFileFields
               file={file}
               setFile={setFile}
               pending={pending}
               editing={editing}
-              hideExpiry
+              hideExpiry={!isRenewableFrequency(editing.renewalFrequency)}
+              requireExpiry={isRenewableFrequency(editing.renewalFrequency)}
             />
             <DocumentNotesField pending={pending} defaultNotes={editing.notes} />
           </form>

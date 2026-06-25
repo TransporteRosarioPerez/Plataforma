@@ -13,6 +13,7 @@ import { AUDIT_ACTIONS } from '@/lib/audit/actions'
 import { logAudit } from '@/lib/audit/log'
 import { computeDocumentStatus } from '@/lib/documents/status'
 import { isRenewableFrequency } from '@/lib/documents/renewal'
+import { parseDateOnly } from '@/lib/documents/dates'
 import type { RenewalFrequency } from '@/lib/types'
 
 function revalidateEntityPaths(entityType: string, entityId: string) {
@@ -68,7 +69,10 @@ function buildDocumentRow(
   const status =
     renewalFrequency === 'once' && !expiryDate
       ? 'valid'
-      : computeDocumentStatus(expiryDate ? new Date(expiryDate) : null, alertDays)
+      : computeDocumentStatus(
+          expiryDate ? parseDateOnly(expiryDate) : null,
+          alertDays
+        )
 
   return {
     name: parsed.name.trim(),
@@ -111,18 +115,25 @@ export async function upsertEntityDocument(
       return { error: 'Solo se puede editar el documento vigente' }
     }
 
-    if (isRenewableFrequency(existing.renewal_frequency as RenewalFrequency)) {
-      return {
-        error: 'Los documentos por intervalo se actualizan con "Renovar" para guardar el historial',
-      }
-    }
+    const frequency = existing.renewal_frequency as RenewalFrequency
+    const renewable = isRenewableFrequency(frequency)
 
     const updatePayload: Record<string, unknown> = {
       name: parsed.data.name.trim(),
       issue_date: parsed.data.issue_date || null,
-      expiry_date: null,
-      status: 'valid',
       notes: parsed.data.notes || null,
+    }
+
+    if (renewable) {
+      const expiryDate = parsed.data.expiry_date?.trim() || null
+      if (!expiryDate) {
+        return { error: 'Vencimiento requerido para documentos por intervalo' }
+      }
+      updatePayload.expiry_date = expiryDate
+      updatePayload.status = computeDocumentStatus(parseDateOnly(expiryDate), alertDays)
+    } else {
+      updatePayload.expiry_date = null
+      updatePayload.status = 'valid'
     }
 
     if (parsed.data.file_url) {

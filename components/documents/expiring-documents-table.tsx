@@ -14,7 +14,7 @@ import {
   documentStatusLabels,
   documentStatusColors,
 } from '@/lib/documents/status'
-import { formatExpiryTiming } from '@/lib/documents/dates'
+import { formatExpiryTiming, formatDateOnlyDisplay } from '@/lib/documents/dates'
 import { entityTypeLabels, entityTypeOrder } from '@/lib/documents/entity-labels'
 import {
   DocumentRenewDialog,
@@ -22,12 +22,6 @@ import {
 } from '@/components/documents/document-renew-dialog'
 import type { ExpiringDocumentRow } from '@/lib/data/documents'
 import type { DocumentEntityType } from '@/lib/types'
-
-const dateFormatter = new Intl.DateTimeFormat('es-AR', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-})
 
 type EntityFilter = DocumentEntityType | 'all'
 
@@ -196,7 +190,7 @@ export function ExpiringDocumentsTable({
                       )}
                       <TableCell className="font-medium">{doc.documentName}</TableCell>
                       <TableCell className="whitespace-nowrap">
-                        {doc.expiryDate ? dateFormatter.format(doc.expiryDate) : '—'}
+                        {doc.expiryDate ? formatDateOnlyDisplay(doc.expiryDate) : '—'}
                       </TableCell>
                       <TableCell className="text-sm">
                         {formatExpiryTiming(doc.daysUntilExpiry) || '—'}
