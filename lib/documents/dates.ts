@@ -16,18 +16,28 @@ export function validateIssueBeforeExpiry(
   return null
 }
 
-/** Parsea YYYY-MM-DD como fecha local (sin desfase UTC). */
+/** Partes de calendario de un valor date-only (UTC, sin hora). */
+export function dateOnlyParts(date: Date): { y: number; m: number; d: number } {
+  return {
+    y: date.getUTCFullYear(),
+    m: date.getUTCMonth() + 1,
+    d: date.getUTCDate(),
+  }
+}
+
+/**
+ * Parsea YYYY-MM-DD como medianoche UTC.
+ * Así la fecha sobrevive la serialización RSC (server → client) sin correr un día.
+ */
 export function parseDateOnly(iso: string): Date {
   const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y, m - 1, d)
+  return new Date(Date.UTC(y, m - 1, d))
 }
 
 /** Formato YYYY-MM-DD para inputs type="date". */
 export function formatDateOnlyInput(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
+  const { y, m, d } = dateOnlyParts(date)
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
 const dateOnlyDisplayFormatter = new Intl.DateTimeFormat('es-AR', {
@@ -36,9 +46,10 @@ const dateOnlyDisplayFormatter = new Intl.DateTimeFormat('es-AR', {
   year: 'numeric',
 })
 
-/** Formato legible dd/mm/yyyy en hora local. */
+/** Formato legible dd/mm/yyyy (calendario, sin desfase por zona horaria). */
 export function formatDateOnlyDisplay(date: Date): string {
-  return dateOnlyDisplayFormatter.format(date)
+  const { y, m, d } = dateOnlyParts(date)
+  return dateOnlyDisplayFormatter.format(new Date(y, m - 1, d))
 }
 
 const expiryDateFormatter = dateOnlyDisplayFormatter

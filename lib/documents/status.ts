@@ -2,8 +2,23 @@ import type { DocumentRecord } from '@/lib/types'
 
 export type DocumentStatus = DocumentRecord['status']
 
-function startOfDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+const ARGENTINA_TZ = 'America/Argentina/Buenos_Aires'
+
+function calendarDayEpochUtc(date: Date): number {
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+}
+
+function todayCalendarEpochUtc(): number {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ARGENTINA_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const y = Number(parts.find((p) => p.type === 'year')!.value)
+  const m = Number(parts.find((p) => p.type === 'month')!.value)
+  const d = Number(parts.find((p) => p.type === 'day')!.value)
+  return Date.UTC(y, m - 1, d)
 }
 
 export function computeDocumentStatus(
@@ -12,13 +27,12 @@ export function computeDocumentStatus(
 ): DocumentStatus {
   if (!expiryDate) return 'missing'
 
-  const today = startOfDay(new Date())
-  const expiry = startOfDay(expiryDate)
+  const today = todayCalendarEpochUtc()
+  const expiry = calendarDayEpochUtc(expiryDate)
 
   if (expiry < today) return 'expired'
 
-  const warningLimit = new Date(today)
-  warningLimit.setDate(warningLimit.getDate() + daysBeforeWarning)
+  const warningLimit = today + daysBeforeWarning * 24 * 60 * 60 * 1000
 
   if (expiry <= warningLimit) return 'expiring_soon'
 
@@ -26,9 +40,9 @@ export function computeDocumentStatus(
 }
 
 export function daysUntilExpiry(expiryDate: Date): number {
-  const today = startOfDay(new Date())
-  const expiry = startOfDay(expiryDate)
-  return Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  const today = todayCalendarEpochUtc()
+  const expiry = calendarDayEpochUtc(expiryDate)
+  return Math.round((expiry - today) / (1000 * 60 * 60 * 24))
 }
 
 export const documentStatusLabels: Record<DocumentStatus, string> = {
