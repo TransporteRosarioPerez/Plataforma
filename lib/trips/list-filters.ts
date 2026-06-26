@@ -3,7 +3,6 @@ import {
   dashboardPeriodLabels,
   formatPeriodRangeLabel,
   getDashboardPeriodRange,
-  parseDashboardPeriod,
   type DashboardPeriod,
 } from '@/lib/dashboard/periods'
 import type { CargoType, Trip, TripStatus, TripType } from '@/lib/types'
@@ -125,16 +124,20 @@ function parseDatePeriodFromParams(params: URLSearchParams): Pick<TripListFilter
   const dateFrom = params.get('from') ?? ''
   const dateTo = params.get('to') ?? ''
 
-  if (periodParam === 'custom' || (!periodParam && (dateFrom || dateTo))) {
-    return {
-      datePeriod: dateFrom || dateTo ? 'custom' : 'all',
-      dateFrom,
-      dateTo,
-    }
+  if (periodParam === 'all') {
+    return patchTripDatePeriod('all')
   }
 
-  if (periodParam && periodParam !== 'all' && DASHBOARD_PERIODS.includes(periodParam as DashboardPeriod)) {
-    return patchTripDatePeriod(parseDashboardPeriod(periodParam))
+  if (periodParam === 'custom') {
+    return { datePeriod: 'custom', dateFrom, dateTo }
+  }
+
+  if (periodParam && DASHBOARD_PERIODS.includes(periodParam as DashboardPeriod)) {
+    return patchTripDatePeriod(periodParam as DashboardPeriod)
+  }
+
+  if (!periodParam && (dateFrom || dateTo)) {
+    return { datePeriod: 'custom', dateFrom, dateTo }
   }
 
   return patchTripDatePeriod('last_3_months')
