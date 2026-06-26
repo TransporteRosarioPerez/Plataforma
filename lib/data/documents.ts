@@ -95,7 +95,7 @@ export type ExpiringDocumentsResult = {
 export const getExpiringDocuments = cache(async (): Promise<ExpiringDocumentsResult> => {
   const supabase = await createClient()
 
-  const [docsRes, vehiclesRes, driversRes, companyRes, settingsRes] = await Promise.all([
+  const [docsRes, vehiclesRes, driversRes, companyRes] = await Promise.all([
     supabase
       .from('entity_documents')
       .select('*')
@@ -104,13 +104,12 @@ export const getExpiringDocuments = cache(async (): Promise<ExpiringDocumentsRes
       .not('expiry_date', 'is', null),
     supabase.from('vehicles').select('id, plate').is('deleted_at', null),
     supabase.from('drivers').select('id, name').is('deleted_at', null),
-    supabase.from('company_settings').select('id, name').limit(1).maybeSingle(),
-    supabase.from('company_settings').select('alert_days_before').limit(1).maybeSingle(),
+    supabase.from('company_settings').select('name, alert_days_before').limit(1).maybeSingle(),
   ])
 
   if (docsRes.error) throw new Error(docsRes.error.message)
 
-  const alertDays = settingsRes.data?.alert_days_before ?? 7
+  const alertDays = companyRes.data?.alert_days_before ?? 7
   const vehicleMap = new Map((vehiclesRes.data ?? []).map((v) => [v.id, v.plate as string]))
   const driverMap = new Map((driversRes.data ?? []).map((d) => [d.id, d.name as string]))
   const companyName = companyRes.data?.name ?? 'Empresa'

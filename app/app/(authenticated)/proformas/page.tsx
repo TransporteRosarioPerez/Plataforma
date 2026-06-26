@@ -1,6 +1,6 @@
 import { getProformas } from '@/lib/data/proformas'
 import { getClients } from '@/lib/data/clients'
-import { getTrips } from '@/lib/data/trips'
+import { getTripsForProformas } from '@/lib/data/trips'
 import { getInvoicesByProformaIds } from '@/lib/data/invoices'
 import { ProformasView } from '@/components/proformas/proformas-view'
 import { getSession } from '@/lib/auth/session'
@@ -12,7 +12,7 @@ export default async function ProformasPage() {
   const [proformas, clients, trips] = await Promise.all([
     getProformas(),
     getClients(),
-    getTrips(),
+    getTripsForProformas(),
   ])
 
   const invoicesByProformaId = await getInvoicesByProformaIds(proformas.map((p) => p.id))

@@ -105,7 +105,7 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
   const syncFilters = (next: TripListFilters) => {
     setFilters(next)
     setPage(1)
-    const qs = buildTripListSearchParams(next).toString()
+    const qs = buildTripListSearchParams({ ...next, search: '' }).toString()
     router.replace(qs ? `/app/viajes?${qs}` : '/app/viajes', { scroll: false })
   }
 

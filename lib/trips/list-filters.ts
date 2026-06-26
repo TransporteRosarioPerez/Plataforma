@@ -74,22 +74,6 @@ export type TripListFilters = {
   sortDir: TripSortDirection
 }
 
-export const DEFAULT_TRIP_LIST_FILTERS: TripListFilters = {
-  search: '',
-  status: 'all',
-  clientId: 'all',
-  driverId: 'all',
-  vehicleId: 'all',
-  tripType: 'all',
-  cargoType: 'all',
-  datePeriod: 'all',
-  dateFrom: '',
-  dateTo: '',
-  pdf: 'all',
-  sort: DEFAULT_TRIP_SORT,
-  sortDir: DEFAULT_TRIP_SORT_DIR,
-}
-
 function parseEnum<T extends string>(value: string | null, allowed: readonly T[]): T | null {
   if (!value) return null
   return allowed.includes(value as T) ? (value as T) : null
@@ -122,6 +106,20 @@ export function patchTripDatePeriod(
   }
 }
 
+export const DEFAULT_TRIP_LIST_FILTERS: TripListFilters = {
+  search: '',
+  status: 'all',
+  clientId: 'all',
+  driverId: 'all',
+  vehicleId: 'all',
+  tripType: 'all',
+  cargoType: 'all',
+  ...patchTripDatePeriod('last_3_months'),
+  pdf: 'all',
+  sort: DEFAULT_TRIP_SORT,
+  sortDir: DEFAULT_TRIP_SORT_DIR,
+}
+
 function parseDatePeriodFromParams(params: URLSearchParams): Pick<TripListFilters, 'datePeriod' | 'dateFrom' | 'dateTo'> {
   const periodParam = params.get('period')
   const dateFrom = params.get('from') ?? ''
@@ -139,7 +137,7 @@ function parseDatePeriodFromParams(params: URLSearchParams): Pick<TripListFilter
     return patchTripDatePeriod(parseDashboardPeriod(periodParam))
   }
 
-  return { datePeriod: 'all', dateFrom: '', dateTo: '' }
+  return patchTripDatePeriod('last_3_months')
 }
 
 export function parseTripListFilters(params: URLSearchParams): TripListFilters {
@@ -191,7 +189,9 @@ export function buildTripListSearchParams(filters: TripListFilters): URLSearchPa
   if (filters.vehicleId !== 'all') params.set('vehicle', filters.vehicleId)
   if (filters.tripType !== 'all') params.set('tripType', filters.tripType)
   if (filters.cargoType !== 'all') params.set('cargoType', filters.cargoType)
-  if (filters.datePeriod !== 'all') {
+  if (filters.datePeriod === 'all') {
+    params.set('period', 'all')
+  } else {
     params.set('period', filters.datePeriod)
     if (filters.datePeriod === 'custom') {
       if (filters.dateFrom) params.set('from', filters.dateFrom)

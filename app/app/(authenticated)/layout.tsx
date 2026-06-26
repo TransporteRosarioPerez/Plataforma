@@ -1,22 +1,24 @@
+import { Suspense } from 'react'
 import { requireSession } from '@/lib/auth/session'
-import { getExpiringDocuments } from '@/lib/data/documents'
 import { AppShell } from '@/components/app-shell'
+import { HeaderNotifications } from '@/components/notifications/header-notifications'
+import { NotificationsBellSkeleton } from '@/components/notifications/notifications-bell-skeleton'
 
 export default async function AuthenticatedLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const [{ profile }, expiring] = await Promise.all([
-    requireSession(),
-    getExpiringDocuments(),
-  ])
+  const { profile } = await requireSession()
 
   return (
     <AppShell
       profile={profile}
-      notifications={expiring.documents}
-      alertDaysBefore={expiring.alertDaysBefore}
+      notifications={
+        <Suspense fallback={<NotificationsBellSkeleton />}>
+          <HeaderNotifications />
+        </Suspense>
+      }
     >
       {children}
     </AppShell>

@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { LogOut, Menu } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SidebarTrigger } from '@/components/ui/sidebar'
@@ -11,18 +12,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { NavNotificationsBell } from '@/components/notifications/nav-notifications-bell'
 import { signOut } from '@/lib/actions/auth'
-import type { ExpiringDocumentRow } from '@/lib/data/documents'
 import type { SessionProfile } from '@/lib/types'
 
 type AppHeaderProps = {
   profile: SessionProfile
-  notifications: ExpiringDocumentRow[]
-  alertDaysBefore: number
+  notifications: ReactNode
 }
 
-export function AppHeader({ profile, notifications, alertDaysBefore }: AppHeaderProps) {
+export function AppHeader({ profile, notifications }: AppHeaderProps) {
   return (
     <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b bg-card px-6">
       <SidebarTrigger className="-ml-2">
@@ -32,10 +30,7 @@ export function AppHeader({ profile, notifications, alertDaysBefore }: AppHeader
 
       <div className="flex-1" />
 
-      <NavNotificationsBell
-        notifications={notifications}
-        alertDaysBefore={alertDaysBefore}
-      />
+      {notifications}
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

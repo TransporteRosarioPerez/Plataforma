@@ -2,6 +2,10 @@ import 'server-only'
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { mapClient, mapDriver, mapVehicle, type DbClient, type DbDriver, type DbVehicle } from '@/lib/db/mappers'
+import {
+  resolveTripDateRange,
+  type TripListFilters,
+} from '@/lib/trips/list-filters'
 import type { Trip, TripStatus, TripType, CargoType } from '@/lib/types'
 
 type DbTrip = {
@@ -97,33 +101,154 @@ const tripSelect = `
   drivers:drivers!trips_driver_id_fkey (*)
 `
 
+const proformaTripSelect = `
+  id,
+  code,
+  status,
+  trip_type,
+  arcor_client_id,
+  vehicle_id,
+  trailer_id,
+  driver_id,
+  origin,
+  destination,
+  departure_date,
+  arrival_date,
+  cargo_type,
+  total_pallets,
+  unit_price,
+  proforma_unit_price,
+  total_income,
+  total_expenses,
+  profit,
+  pdf_storage_key,
+  created_at,
+  updated_at,
+  arcor_clients:arcor_clients!trips_arcor_client_id_fkey (*),
+  vehicles:vehicles!trips_vehicle_id_fkey (*),
+  trailers:vehicles!trips_trailer_id_fkey (*),
+  drivers:drivers!trips_driver_id_fkey (*)
+`
+
+const fuelTripSelect = `
+  id,
+  code,
+  vehicles:vehicles!trips_vehicle_id_fkey (plate),
+  trailers:vehicles!trips_trailer_id_fkey (plate)
+`
+
+export type TripFuelOption = {
+  id: string
+  code: string
+  vehiclePlate?: string
+  trailerPlate?: string
+}
+
+function formatDateOnly(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 async function getObservationCountsMap(): Promise<Map<string, number>> {
   const supabase = await createClient()
+  const { data, error } = await supabase.rpc('get_trip_observation_counts')
+
+  if (!error) {
+    const counts = new Map<string, number>()
+    for (const row of data ?? []) {
+      counts.set(row.trip_id as string, Number(row.observation_count ?? 0))
+    }
+    return counts
+  }
+
   const counts = new Map<string, number>()
   const pageSize = 1000
   let offset = 0
 
   while (true) {
-    const { data, error } = await supabase
+    const { data: rows, error: pageError } = await supabase
       .from('trip_observations')
       .select('trip_id')
       .is('deleted_at', null)
       .range(offset, offset + pageSize - 1)
 
-    if (error) throw new Error(error.message)
+    if (pageError) throw new Error(pageError.message)
 
-    const rows = data ?? []
-    for (const row of rows) {
+    for (const row of rows ?? []) {
       const tripId = row.trip_id as string
       counts.set(tripId, (counts.get(tripId) ?? 0) + 1)
     }
 
-    if (rows.length < pageSize) break
+    if (!rows || rows.length < pageSize) break
     offset += pageSize
   }
 
   return counts
 }
+
+import type { PostgrestFilterBuilder } from '@supabase/postgrest-js'
+
+function applyTripListFilters(
+  query: PostgrestFilterBuilder<any, any, any, any, any>,
+  filters: TripListFilters
+) {
+  let next = query
+
+  if (filters.status !== 'all') {
+    next = next.eq('status', filters.status)
+  }
+  if (filters.clientId !== 'all') {
+    next = next.eq('arcor_client_id', filters.clientId)
+  }
+  if (filters.driverId !== 'all') {
+    next = next.eq('driver_id', filters.driverId)
+  }
+  if (filters.vehicleId !== 'all') {
+    next = next.or(`vehicle_id.eq.${filters.vehicleId},trailer_id.eq.${filters.vehicleId}`)
+  }
+  if (filters.tripType !== 'all') {
+    next = next.eq('trip_type', filters.tripType)
+  }
+  if (filters.cargoType !== 'all') {
+    next = next.eq('cargo_type', filters.cargoType)
+  }
+  if (filters.pdf === 'yes') {
+    next = next.not('pdf_storage_key', 'is', null)
+  }
+  if (filters.pdf === 'no') {
+    next = next.is('pdf_storage_key', null)
+  }
+
+  const { from, to } = resolveTripDateRange(filters)
+  if (from) {
+    next = next.gte('departure_date', formatDateOnly(from))
+  }
+  if (to) {
+    next = next.lte('departure_date', formatDateOnly(to))
+  }
+
+  return next
+}
+
+export const getTripsForList = cache(async (filters: TripListFilters) => {
+  const supabase = await createClient()
+  let query = supabase
+    .from('trips')
+    .select(tripSelect)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+
+  query = applyTripListFilters(query, filters)
+
+  const { data, error } = await query
+  if (error) throw new Error(error.message)
+
+  const rows = data as DbTrip[]
+  const observationCounts = await getObservationCountsMap()
+  return rows.map((row) => mapTrip(row, observationCounts.get(row.id) ?? 0))
+})
 
 export const getTrips = cache(async () => {
   const supabase = await createClient()
@@ -138,6 +263,44 @@ export const getTrips = cache(async () => {
   const rows = data as DbTrip[]
   const observationCounts = await getObservationCountsMap()
   return rows.map((row) => mapTrip(row, observationCounts.get(row.id) ?? 0))
+})
+
+export const getTripsForProformas = cache(async () => {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('trips')
+    .select(proformaTripSelect)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+
+  return (data as DbTrip[]).map((row) => mapTrip(row, 0))
+})
+
+export const getTripFuelOptions = cache(async (): Promise<TripFuelOption[]> => {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('trips')
+    .select(fuelTripSelect)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+
+  return (data ?? []).map((row) => {
+    const vehicles = row.vehicles as { plate: string } | { plate: string }[] | null
+    const trailers = row.trailers as { plate: string } | { plate: string }[] | null
+    const vehicle = Array.isArray(vehicles) ? vehicles[0] : vehicles
+    const trailer = Array.isArray(trailers) ? trailers[0] : trailers
+
+    return {
+      id: row.id as string,
+      code: row.code as string,
+      vehiclePlate: vehicle?.plate,
+      trailerPlate: trailer?.plate,
+    }
+  })
 })
 
 export const getTripById = cache(async (id: string) => {
