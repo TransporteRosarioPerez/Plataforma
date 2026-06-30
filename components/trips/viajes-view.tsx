@@ -80,6 +80,7 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
   const filtersFromUrl = useMemo(() => parseTripListFilters(searchParams), [searchParams])
 
   const [filters, setFilters] = useState<TripListFilters>(filtersFromUrl)
+  const [search, setSearch] = useState(() => filtersFromUrl.search)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [pageSize, setPageSize] = useState<number>(50)
   const [page, setPage] = useState(1)
@@ -94,9 +95,14 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
   const syncFilters = (next: TripListFilters) => {
     setFilters(next)
     setPage(1)
-    const qs = buildTripListSearchParams({ ...next, search: '' }).toString()
+    const qs = buildTripListSearchParams(next).toString()
     router.replace(qs ? `/app/viajes?${qs}` : '/app/viajes', { scroll: false })
   }
+
+  const listFilters = useMemo(
+    () => ({ ...filters, search }),
+    [filters, search]
+  )
 
   const patchFilters = (patch: Partial<TripListFilters>) => {
     syncFilters({ ...filters, ...patch })
@@ -131,8 +137,8 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
   const dateRangeLabel = getTripDateRangeLabel(filters)
 
   const filtered = useMemo(
-    () => sortTrips(filterTrips(trips, filters), filters.sort, filters.sortDir),
-    [trips, filters]
+    () => sortTrips(filterTrips(trips, listFilters), listFilters.sort, listFilters.sortDir),
+    [trips, listFilters]
   )
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
@@ -193,8 +199,11 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Buscar nº de viaje, cliente, ruta..."
-                    value={filters.search}
-                    onChange={(e) => patchFilters({ search: e.target.value })}
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value)
+                      setPage(1)
+                    }}
                     className="pl-9"
                   />
                 </div>
@@ -247,7 +256,10 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                 type="button"
                 variant="link"
                 className="mt-2"
-                onClick={() => syncFilters({ ...DEFAULT_TRIP_LIST_FILTERS })}
+                onClick={() => {
+                  setSearch('')
+                  syncFilters({ ...DEFAULT_TRIP_LIST_FILTERS })
+                }}
               >
                 Restablecer todos los filtros
               </Button>
