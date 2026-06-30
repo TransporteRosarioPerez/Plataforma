@@ -9,21 +9,20 @@ import { AUDIT_ACTIONS } from '@/lib/audit/actions'
 import { logAudit } from '@/lib/audit/log'
 import { arcorClientSchema } from '@/lib/validations/arcor-clients'
 
-async function accountIdTaken(
+async function findArcorClientByAccountId(
   supabase: Awaited<ReturnType<typeof createClient>>,
   accountId: string,
   excludeId?: string
 ) {
   let query = supabase
     .from('arcor_clients')
-    .select('id')
+    .select('id, deleted_at')
     .eq('account_id', accountId)
-    .is('deleted_at', null)
 
   if (excludeId) query = query.neq('id', excludeId)
 
   const { data } = await query.maybeSingle()
-  return !!data
+  return data as { id: string; deleted_at: string | null } | null
 }
 
 export async function upsertArcorClient(
@@ -37,15 +36,24 @@ export async function upsertArcorClient(
   const supabase = await createClient()
   const accountId = parsed.data.account_id?.trim() || null
 
-  if (accountId) {
-    const taken = await accountIdTaken(supabase, accountId, parsed.data.id)
-    if (taken) return { error: 'Ya existe una cuenta con ese número de cliente' }
-  }
-
   const row = {
     name: parsed.data.name.trim(),
     account_id: accountId,
     address: parsed.data.address?.trim() || null,
+  }
+
+  const existingByAccountId =
+    accountId && !parsed.data.id
+      ? await findArcorClientByAccountId(supabase, accountId)
+      : null
+
+  if (accountId && parsed.data.id) {
+    const conflict = await findArcorClientByAccountId(supabase, accountId, parsed.data.id)
+    if (conflict && !conflict.deleted_at) {
+      return { error: 'Ya existe una cuenta con ese número de cliente' }
+    }
+  } else if (existingByAccountId && !existingByAccountId.deleted_at) {
+    return { error: 'Ya existe una cuenta con ese número de cliente' }
   }
 
   if (parsed.data.id) {
@@ -57,6 +65,19 @@ export async function upsertArcorClient(
       entityId: parsed.data.id,
       entityLabel: row.name,
       summary: `Actualizó la cuenta de viaje ${row.name}`,
+    })
+  } else if (existingByAccountId?.deleted_at) {
+    const { error } = await supabase
+      .from('arcor_clients')
+      .update({ ...row, deleted_at: null })
+      .eq('id', existingByAccountId.id)
+    if (error) return { error: error.message }
+    await logAudit({
+      action: AUDIT_ACTIONS.arcorClientUpsert,
+      entityType: 'arcor_client',
+      entityId: existingByAccountId.id,
+      entityLabel: row.name,
+      summary: `Recuperó la cuenta de viaje ${row.name} (${accountId})`,
     })
   } else {
     const { data, error } = await supabase.from('arcor_clients').insert(row).select('id').single()
@@ -72,7 +93,14 @@ export async function upsertArcorClient(
 
   revalidatePath('/app/cuentas-viaje')
   revalidatePath('/app/viajes')
-  return { success: parsed.data.id ? 'Cuenta actualizada' : 'Cuenta creada' }
+  revalidatePath('/app/papelera')
+  return {
+    success: parsed.data.id
+      ? 'Cuenta actualizada'
+      : existingByAccountId?.deleted_at
+        ? 'Cuenta recuperada del catálogo'
+        : 'Cuenta creada',
+  }
 }
 
 export async function deleteArcorClient(id: string): Promise<ActionState> {
