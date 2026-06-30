@@ -80,18 +80,7 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
   const filtersFromUrl = useMemo(() => parseTripListFilters(searchParams), [searchParams])
 
   const [filters, setFilters] = useState<TripListFilters>(filtersFromUrl)
-  const [filtersOpen, setFiltersOpen] = useState(() => {
-    const parsed = parseTripListFilters(searchParams)
-    return (
-      parsed.clientId !== 'all' ||
-      parsed.driverId !== 'all' ||
-      parsed.vehicleId !== 'all' ||
-      parsed.tripType !== 'all' ||
-      parsed.cargoType !== 'all' ||
-      parsed.datePeriod !== 'all' ||
-      parsed.pdf !== 'all'
-    )
-  })
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [pageSize, setPageSize] = useState<number>(50)
   const [page, setPage] = useState(1)
   const [showNewTrip, setShowNewTrip] = useState(false)
