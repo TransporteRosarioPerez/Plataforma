@@ -282,10 +282,11 @@ export function TripFormFields({
           <select
             name="vehicle_id"
             required
-            defaultValue={trip?.vehicleId ?? trucks[0]?.id ?? ''}
+            defaultValue={trip?.vehicleId ?? ''}
             className={selectClass}
             disabled={disabled}
           >
+            {mode === 'create' && <option value="">Seleccionar camión</option>}
             {trucks.map((v) => (
               <option key={v.id} value={v.id}>{v.plate} — {v.brand}</option>
             ))}
@@ -296,10 +297,11 @@ export function TripFormFields({
           <select
             name="trailer_id"
             required
-            defaultValue={trip?.trailerId ?? trailers[0]?.id ?? ''}
+            defaultValue={trip?.trailerId ?? ''}
             className={selectClass}
             disabled={disabled}
           >
+            {mode === 'create' && <option value="">Seleccionar semi / acoplado</option>}
             {trailers.map((v) => (
               <option key={v.id} value={v.id}>{v.plate}</option>
             ))}
@@ -310,10 +312,11 @@ export function TripFormFields({
           <select
             name="driver_id"
             required
-            defaultValue={trip?.driverId ?? activeDrivers[0]?.id ?? ''}
+            defaultValue={trip?.driverId ?? ''}
             className={selectClass}
             disabled={disabled}
           >
+            {mode === 'create' && <option value="">Seleccionar chofer</option>}
             {activeDrivers.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
