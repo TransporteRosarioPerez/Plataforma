@@ -53,6 +53,7 @@ async function validateTripMasters(
 }
 
 function tripRowFromForm(parsed: {
+  code: string
   client_id: string
   vehicle_id: string
   trailer_id: string
@@ -75,6 +76,7 @@ function tripRowFromForm(parsed: {
   notes?: string
 }) {
   return {
+    code: parsed.code.trim(),
     arcor_client_id: parsed.client_id,
     trip_type: parsed.trip_type,
     vehicle_id: parsed.vehicle_id,
@@ -98,13 +100,15 @@ function tripRowFromForm(parsed: {
   }
 }
 
-async function nextTripCode(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const year = new Date().getFullYear()
-  const { count } = await supabase
-    .from('trips')
-    .select('id', { count: 'exact', head: true })
-  const n = (count ?? 0) + 1
-  return `VJ-${year}-${String(n).padStart(3, '0')}`
+async function tripCodeTaken(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  code: string,
+  excludeId?: string
+) {
+  let query = supabase.from('trips').select('id').eq('code', code).is('deleted_at', null)
+  if (excludeId) query = query.neq('id', excludeId)
+  const { data } = await query.maybeSingle()
+  return !!data
 }
 
 export async function createTrip(
@@ -120,12 +124,14 @@ export async function createTrip(
   const masterError = await validateTripMasters(supabase, parsed.data)
   if (masterError) return masterError
 
-  const code = await nextTripCode(supabase)
+  const code = parsed.data.code.trim()
+  if (await tripCodeTaken(supabase, code)) {
+    return { error: 'Ya existe un viaje con ese nº de carga' }
+  }
 
   const { data, error } = await supabase
     .from('trips')
     .insert({
-      code,
       status: parsed.data.status,
       ...tripRowFromForm(parsed.data),
       metadata: {},
@@ -185,6 +191,11 @@ export async function updateTrip(
   const masterError = await validateTripMasters(supabase, parsed.data, existing)
   if (masterError) return masterError
 
+  const code = parsed.data.code.trim()
+  if (code !== existing.code && (await tripCodeTaken(supabase, code, tripId))) {
+    return { error: 'Ya existe un viaje con ese nº de carga' }
+  }
+
   const { error } = await supabase
     .from('trips')
     .update(tripRowFromForm(parsed.data))
@@ -196,8 +207,8 @@ export async function updateTrip(
     action: AUDIT_ACTIONS.tripUpdate,
     entityType: 'trip',
     entityId: tripId,
-    entityLabel: existing.code,
-    summary: `Actualizó el viaje ${existing.code}`,
+    entityLabel: code,
+    summary: `Actualizó el viaje ${code}`,
   })
 
   revalidatePath('/app/viajes')

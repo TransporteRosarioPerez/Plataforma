@@ -81,12 +81,22 @@ export function TripFormFields({
 
   return (
     <>
-      {mode === 'edit' && trip && (
-        <Field>
-          <FieldLabel>Código</FieldLabel>
-          <Input value={trip.code} readOnly className="bg-muted font-mono" />
-        </Field>
-      )}
+      <Field>
+        <FieldLabel htmlFor="trip_code">Nº de carga *</FieldLabel>
+        <Input
+          id="trip_code"
+          name="code"
+          required
+          disabled={disabled}
+          defaultValue={trip?.code ?? ''}
+          placeholder="Ej. 12345678"
+          className="font-mono"
+          autoComplete="off"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          Número operativo que usan para identificar la carga.
+        </p>
+      </Field>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field>

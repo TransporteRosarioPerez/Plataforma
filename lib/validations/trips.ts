@@ -20,6 +20,7 @@ const tripStatusSchema = z.enum([
 ])
 
 export const createTripSchema = z.object({
+  code: z.string().trim().min(1, 'El nº de carga es obligatorio'),
   client_id: z.string().uuid('Seleccioná un cliente'),
   vehicle_id: z.string().uuid('Seleccioná un camión'),
   trailer_id: z.string().uuid('Seleccioná un semi o acoplado'),
