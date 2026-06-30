@@ -203,7 +203,7 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                 <div className="relative w-full sm:w-72">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    placeholder="Buscar carga, cliente, ruta..."
+                    placeholder="Buscar nº de viaje, cliente, ruta..."
                     value={filters.search}
                     onChange={(e) => patchFilters({ search: e.target.value })}
                     className="pl-9"
@@ -278,7 +278,7 @@ export function ViajesView({ trips, arcorClients, vehicles, drivers }: ViajesVie
                 <TableHeader>
                   <TableRow>
                     <TripSortableHead
-                      label="Carga"
+                      label="Nº de viaje"
                       column="code"
                       activeColumn={filters.sort}
                       activeDirection={filters.sortDir}

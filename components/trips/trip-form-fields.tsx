@@ -82,7 +82,7 @@ export function TripFormFields({
   return (
     <>
       <Field>
-        <FieldLabel htmlFor="trip_code">Nº de carga *</FieldLabel>
+        <FieldLabel htmlFor="trip_code">Nº de viaje *</FieldLabel>
         <Input
           id="trip_code"
           name="code"
@@ -94,7 +94,7 @@ export function TripFormFields({
           autoComplete="off"
         />
         <p className="text-xs text-muted-foreground mt-1">
-          Número operativo que usan para identificar la carga.
+          Número operativo que usan para identificar el viaje.
         </p>
       </Field>
 

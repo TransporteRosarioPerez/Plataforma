@@ -126,7 +126,7 @@ export async function createTrip(
 
   const code = parsed.data.code.trim()
   if (await tripCodeTaken(supabase, code)) {
-    return { error: 'Ya existe un viaje con ese nº de carga' }
+    return { error: 'Ya existe un viaje con ese nº de viaje' }
   }
 
   const { data, error } = await supabase
@@ -193,7 +193,7 @@ export async function updateTrip(
 
   const code = parsed.data.code.trim()
   if (code !== existing.code && (await tripCodeTaken(supabase, code, tripId))) {
-    return { error: 'Ya existe un viaje con ese nº de carga' }
+    return { error: 'Ya existe un viaje con ese nº de viaje' }
   }
 
   const { error } = await supabase
