@@ -5,8 +5,7 @@ import {
   getDashboardPeriodRange,
   type DashboardPeriod,
 } from '@/lib/dashboard/periods'
-import type { CargoType, Trip, TripStatus, TripType } from '@/lib/types'
-import { TRIP_STATUSES } from '@/lib/types'
+import { CARGO_TYPES, TRIP_STATUSES, type CargoType, type Trip, type TripStatus, type TripType } from '@/lib/types'
 
 export type TripSortColumn =
   | 'code'
@@ -173,7 +172,7 @@ export function parseTripListFilters(params: URLSearchParams): TripListFilters {
     vehicleId: params.get('vehicle') ?? 'all',
     tripType: parseEnum(params.get('tripType'), ['carta_porte', 'solo_remitos'] as const) ?? 'all',
     cargoType:
-      parseEnum(params.get('cargoType'), ['general', 'grains', 'hazmat', 'cold_chain'] as const) ??
+      parseEnum(params.get('cargoType'), CARGO_TYPES) ??
       'all',
     ...parseDatePeriodFromParams(params),
     pdf,

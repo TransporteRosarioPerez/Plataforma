@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select'
 import {
   cargoTypeLabels,
+  CARGO_TYPES,
   tripTypeLabels,
   type ArcorClient,
   type Driver,
@@ -184,9 +185,9 @@ export function TripFiltersPanel({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
-                {Object.entries(cargoTypeLabels).map(([value, label]) => (
+                {CARGO_TYPES.map((value) => (
                   <SelectItem key={value} value={value}>
-                    {label}
+                    {cargoTypeLabels[value]}
                   </SelectItem>
                 ))}
               </SelectContent>

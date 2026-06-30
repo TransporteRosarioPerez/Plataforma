@@ -90,7 +90,15 @@ export interface Client {
 export type ArcorClient = Client
 
 // Cargo types
-export type CargoType = 'general' | 'grains' | 'hazmat' | 'cold_chain'
+export type CargoType = 'general' | 'grains' | 'hazmat' | 'cold_chain' | 'super_frozen'
+
+export const CARGO_TYPES: CargoType[] = [
+  'cold_chain',
+  'super_frozen',
+  'general',
+  'grains',
+  'hazmat',
+]
 
 // Trip type
 export type TripType = 'carta_porte' | 'solo_remitos'
@@ -450,10 +458,11 @@ export const tripTypeLabels: Record<TripType, string> = {
 }
 
 export const cargoTypeLabels: Record<CargoType, string> = {
-  general: 'Carga General',
+  general: 'Seco / General',
   grains: 'Granos',
   hazmat: 'Peligrosa',
-  cold_chain: 'Cadena de Frío'
+  cold_chain: 'Refrigerado',
+  super_frozen: 'Supercongelado',
 }
 
 export const roleLabels: Record<UserRole, string> = {

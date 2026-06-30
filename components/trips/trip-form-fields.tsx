@@ -6,7 +6,7 @@ import { NumberInput } from '@/components/ui/number-input'
 import { Textarea } from '@/components/ui/textarea'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { ArcorClientCombobox } from '@/components/clients/arcor-client-combobox'
-import { TRIP_STATUSES, tripStatusLabels } from '@/lib/types'
+import { TRIP_STATUSES, tripStatusLabels, cargoTypeLabels, CARGO_TYPES } from '@/lib/types'
 import type { ArcorClient, Driver, Trip, Vehicle } from '@/lib/types'
 
 const selectClass = 'flex h-9 w-full rounded-md border px-3 text-sm'
@@ -169,10 +169,11 @@ export function TripFormFields({
             className={selectClass}
             disabled={disabled}
           >
-            <option value="cold_chain">Refrigerado</option>
-            <option value="general">Seco / General</option>
-            <option value="grains">Granos</option>
-            <option value="hazmat">Peligrosa</option>
+            {CARGO_TYPES.map((value) => (
+              <option key={value} value={value}>
+                {cargoTypeLabels[value]}
+              </option>
+            ))}
           </select>
         </Field>
         {mode === 'create' && (

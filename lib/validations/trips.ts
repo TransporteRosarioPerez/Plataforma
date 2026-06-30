@@ -1,5 +1,7 @@
 import { z } from 'zod'
-import { TRIP_STATUSES } from '@/lib/types'
+import { CARGO_TYPES, TRIP_STATUSES, type CargoType } from '@/lib/types'
+
+const cargoTypeSchema = z.enum(CARGO_TYPES as [CargoType, ...CargoType[]])
 
 const optionalNumber = (schema: z.ZodNumber) =>
   z.preprocess(
@@ -26,7 +28,7 @@ export const createTripSchema = z.object({
   origin: z.string().min(1, 'El origen es obligatorio'),
   destination: z.string().min(1, 'El destino es obligatorio'),
   number_of_clients: z.string().min(1, 'Cantidad de clientes requerida'),
-  cargo_type: z.enum(['general', 'grains', 'hazmat', 'cold_chain']),
+  cargo_type: cargoTypeSchema,
   status: tripStatusSchema.default('incomplete'),
   departure_date: z.string().optional(),
   arrival_date: z.string().optional(),
