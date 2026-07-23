@@ -9,7 +9,7 @@ import { createInvoiceSchema } from '@/lib/validations/invoices'
 import { AUDIT_ACTIONS } from '@/lib/audit/actions'
 import { logAudit } from '@/lib/audit/log'
 import { calculateInvoiceAmounts } from '@/lib/invoices/calculate'
-import { applyProformaLineItemsToTrips, loadProformaLineAmounts } from '@/lib/proformas/trip-billing-sync'
+import { applyProformaLineItemsToTrips, loadProformaLineAmounts, resyncTripsBilling } from '@/lib/proformas/trip-billing-sync'
 
 function revalidateInvoicePaths(proformaId?: string, tripIds: string[] = []) {
   revalidatePath('/app/facturas')
@@ -188,6 +188,11 @@ export async function deleteInvoice(id: string): Promise<ActionState> {
       .eq('status', 'facturada')
   }
 
+  const tripIds: string[] = invoice.trip_ids ?? []
+  if (tripIds.length > 0) {
+    await resyncTripsBilling(supabase, tripIds)
+  }
+
   await logAudit({
     action: AUDIT_ACTIONS.invoiceDelete,
     entityType: 'invoice',
@@ -196,7 +201,6 @@ export async function deleteInvoice(id: string): Promise<ActionState> {
     summary: `Eliminó la factura ${invoice.invoice_number}`,
   })
 
-  const tripIds: string[] = invoice.trip_ids ?? []
   revalidateInvoicePaths(invoice.proforma_id ?? undefined, tripIds)
   return { success: 'Factura dada de baja. Podés recuperarla desde Papelera.' }
 }

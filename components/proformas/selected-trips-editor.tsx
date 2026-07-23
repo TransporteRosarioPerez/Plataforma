@@ -1,7 +1,8 @@
 'use client'
 
-import { Plus, X } from 'lucide-react'
+import { Plus, Share2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { NumberInput } from '@/components/ui/number-input'
 import { Field, FieldLabel } from '@/components/ui/field'
 import type { Trip } from '@/lib/types'
@@ -31,9 +32,11 @@ type SelectedTripsEditorProps = {
   trips: Trip[]
   selectedTripIds: string[]
   tripLines: Record<string, TripLineValues>
+  sharedTripIds?: Set<string>
   onRemoveTrip: (tripId: string) => void
   onUpdateLine: (tripId: string, value: string) => void
   onAddTrips: () => void
+  onAddSharedTrip?: () => void
   disabled?: boolean
 }
 
@@ -41,9 +44,11 @@ export function SelectedTripsEditor({
   trips,
   selectedTripIds,
   tripLines,
+  sharedTripIds,
   onRemoveTrip,
   onUpdateLine,
   onAddTrips,
+  onAddSharedTrip,
   disabled,
 }: SelectedTripsEditorProps) {
   const selectedTrips = selectedTripIds
@@ -58,10 +63,18 @@ export function SelectedTripsEditor({
         <p className="text-sm text-muted-foreground">
           Agregá los viajes que querés incluir en esta proforma.
         </p>
-        <Button type="button" variant="outline" size="sm" onClick={onAddTrips} disabled={disabled}>
-          <Plus className="mr-2 h-4 w-4" />
-          Elegir viajes
-        </Button>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onAddTrips} disabled={disabled}>
+            <Plus className="mr-2 h-4 w-4" />
+            Elegir viajes
+          </Button>
+          {onAddSharedTrip && (
+            <Button type="button" variant="ghost" size="sm" onClick={onAddSharedTrip} disabled={disabled}>
+              <Share2 className="mr-2 h-4 w-4" />
+              Viaje compartido
+            </Button>
+          )}
+        </div>
       </div>
     )
   }
@@ -87,11 +100,16 @@ export function SelectedTripsEditor({
             <div key={trip.id} className="p-3 space-y-2.5">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex items-baseline gap-2 flex-wrap">
                     <span className="font-mono text-sm font-semibold">{trip.code}</span>
                     <span className="text-xs text-muted-foreground">
                       {trip.departureDate ? dateFormatter.format(trip.departureDate) : '—'}
                     </span>
+                    {sharedTripIds?.has(trip.id) && (
+                      <Badge variant="outline" className="text-[10px]">
+                        Compartido
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground truncate mt-0.5">
                     {tripRouteLabel(trip)}
@@ -144,10 +162,18 @@ export function SelectedTripsEditor({
           )
         })}
       </div>
-      <Button type="button" variant="outline" size="sm" onClick={onAddTrips} disabled={disabled}>
-        <Plus className="mr-2 h-4 w-4" />
-        Agregar más viajes
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onAddTrips} disabled={disabled}>
+          <Plus className="mr-2 h-4 w-4" />
+          Agregar más viajes
+        </Button>
+        {onAddSharedTrip && (
+          <Button type="button" variant="ghost" size="sm" onClick={onAddSharedTrip} disabled={disabled}>
+            <Share2 className="mr-2 h-4 w-4" />
+            Viaje compartido
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

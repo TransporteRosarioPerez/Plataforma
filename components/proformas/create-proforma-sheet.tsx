@@ -13,12 +13,14 @@ import {
 } from '@/components/ui/select'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { AddTripsDialog } from '@/components/proformas/add-trips-dialog'
+import { AddSharedTripDialog } from '@/components/proformas/add-shared-trip-dialog'
 import { SelectedTripsEditor } from '@/components/proformas/selected-trips-editor'
 import {
   buildTripLineFromEstimate,
   parseTripLineAmount,
   type TripLineValues,
 } from '@/lib/proformas/trip-estimate-amount'
+import type { SharedTripLookup } from '@/lib/actions/proformas'
 import { createProforma } from '@/lib/actions/proformas'
 import { appendProformaFileToFormData } from '@/lib/documents/upload-proforma-file'
 import type { Client, Trip } from '@/lib/types'
@@ -63,7 +65,9 @@ export function CreateProformaSheet({
 
   const [selectedTripIds, setSelectedTripIds] = useState<string[]>([])
   const [tripLines, setTripLines] = useState<Record<string, TripLineValues>>({})
+  const [sharedTripIds, setSharedTripIds] = useState<Set<string>>(() => new Set())
   const [addTripsOpen, setAddTripsOpen] = useState(false)
+  const [addSharedOpen, setAddSharedOpen] = useState(false)
 
   const resetForm = () => {
     setStep(1)
@@ -74,6 +78,7 @@ export function CreateProformaSheet({
     setPdfFile(null)
     setSelectedTripIds([])
     setTripLines({})
+    setSharedTripIds(new Set())
   }
 
   const handleOpenChange = (next: boolean) => {
@@ -113,6 +118,11 @@ export function CreateProformaSheet({
           delete next[tripId]
           return next
         })
+        setSharedTripIds((shared) => {
+          const next = new Set(shared)
+          next.delete(tripId)
+          return next
+        })
         return prev.filter((id) => id !== tripId)
       }
       const trip = getTrip(tripId)
@@ -149,6 +159,26 @@ export function CreateProformaSheet({
         if (!tripIds.includes(id)) delete next[id]
       }
       return next
+    })
+    setSharedTripIds((shared) => {
+      const next = new Set<string>()
+      for (const id of shared) {
+        if (tripIds.includes(id)) next.add(id)
+      }
+      return next
+    })
+  }
+
+  const confirmSharedTrip = (shared: SharedTripLookup) => {
+    setSelectedTripIds((prev) => (prev.includes(shared.tripId) ? prev : [...prev, shared.tripId]))
+    setSharedTripIds((prev) => new Set(prev).add(shared.tripId))
+    setTripLines((lines) => {
+      if (lines[shared.tripId]) return lines
+      const trip = getTrip(shared.tripId)
+      return {
+        ...lines,
+        [shared.tripId]: trip ? buildTripLineFromEstimate(trip) : { amount: '', taxes: '0' },
+      }
     })
   }
 
@@ -349,9 +379,11 @@ export function CreateProformaSheet({
               trips={allTrips}
               selectedTripIds={selectedTripIds}
               tripLines={tripLines}
+              sharedTripIds={sharedTripIds}
               onRemoveTrip={toggleTrip}
               onUpdateLine={updateTripLine}
               onAddTrips={() => setAddTripsOpen(true)}
+              onAddSharedTrip={() => setAddSharedOpen(true)}
               disabled={pending}
             />
           )}
@@ -365,6 +397,13 @@ export function CreateProformaSheet({
         selectedTripIds={selectedTripIds}
         tripLines={tripLines}
         onConfirm={confirmTripSelection}
+      />
+
+      <AddSharedTripDialog
+        open={addSharedOpen}
+        onOpenChange={setAddSharedOpen}
+        excludeTripIds={selectedTripIds}
+        onConfirm={confirmSharedTrip}
       />
     </>
   )

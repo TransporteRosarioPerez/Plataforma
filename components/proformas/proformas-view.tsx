@@ -53,7 +53,7 @@ function getAssignedTripIds(proformas: Proforma[], excludeProformaId?: string): 
   const ids = new Set<string>()
   for (const p of proformas) {
     if (excludeProformaId && p.id === excludeProformaId) continue
-    if (p.status === 'pendiente' || p.status === 'facturada') {
+    if (p.status === 'pendiente' || p.status === 'facturada' || p.status === 'cobrada') {
       p.tripIds.forEach((id) => ids.add(id))
     }
   }
@@ -117,6 +117,12 @@ export function ProformasView({
         return db - da
       })
   }, [billableTrips, editing, proformas, trips])
+
+  const editSharedTripIds = useMemo(() => {
+    if (!editing) return [] as string[]
+    const assignedElsewhere = getAssignedTripIds(proformas, editing.id)
+    return editing.tripIds.filter((id) => assignedElsewhere.has(id))
+  }, [editing, proformas])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -299,6 +305,7 @@ export function ProformasView({
         invoice={editing ? invoicesByProformaId[editing.id] ?? null : null}
         billableTrips={editBillableTrips}
         allTrips={trips}
+        initiallySharedTripIds={editSharedTripIds}
         onRequestDelete={(p) => {
           setToDelete(p)
           setDeleteOpen(true)

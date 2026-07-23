@@ -53,7 +53,7 @@ async function getAssignedTripIds(
     .from('proformas')
     .select('id, trip_ids, status')
     .is('deleted_at', null)
-    .in('status', ['pendiente', 'facturada'])
+    .in('status', ['pendiente', 'facturada', 'cobrada'])
 
   if (error) throw new Error(error.message)
 
@@ -75,14 +75,10 @@ async function validateTripsForProforma(
   if (tripIds.length === 0) return { error: 'Seleccioná al menos un viaje' }
 
   const assigned = await getAssignedTripIds(supabase, excludeProformaId)
-  const overlap = tripIds.filter((id) => assigned.has(id))
-  if (overlap.length > 0) {
-    return { error: 'Uno o más viajes ya están en otra proforma activa' }
-  }
 
   const { data: trips, error } = await supabase
     .from('trips')
-    .select('id, status')
+    .select('id, status, code')
     .is('deleted_at', null)
     .in('id', tripIds)
 
@@ -92,11 +88,12 @@ async function validateTripsForProforma(
   }
 
   const billableStatuses = new Set<TripStatus>(OPERATIONAL_TRIP_STATUSES)
-  const notBillable = trips.filter((t) => !billableStatuses.has(t.status as TripStatus))
+  const freeTrips = trips.filter((t) => !assigned.has(t.id))
+  const notBillable = freeTrips.filter((t) => !billableStatuses.has(t.status as TripStatus))
   if (notBillable.length > 0) {
     return {
       error:
-        'Solo se pueden incluir viajes operativos (no pagados ni ya en cobranza). Los importes se cargan en la proforma.',
+        'Solo se pueden incluir viajes operativos libres, o viajes ya en otra proforma vía “Agregar viaje compartido”.',
     }
   }
 
@@ -283,8 +280,7 @@ export async function updateProforma(
       await revertTripsAfterProformaRemoved(supabase, removedTripIds, { force: true })
     }
 
-    const tripBillingStatus = existing.status === 'cobrada' ? 'paid' : 'pending_payment'
-    await applyProformaLineItemsToTrips(supabase, lineItems, tripBillingStatus)
+    await applyProformaLineItemsToTrips(supabase, lineItems)
 
     const { data: linkedInvoice } = await supabase
       .from('invoices')
@@ -409,3 +405,71 @@ export async function deleteProforma(id: string): Promise<ActionState> {
 
   return { success: 'Proforma dada de baja. Podés recuperarla desde Papelera.' }
 }
+
+export type SharedTripLookup = {
+  tripId: string
+  code: string
+  origin: string
+  destination: string | null
+  status: string
+  existingProformas: { id: string; proformaNumber: string; clientName: string; status: string }[]
+}
+
+export async function findSharedTripForProforma(
+  code: string,
+  options: { excludeProformaId?: string; excludeTripIds?: string[] } = {}
+): Promise<{ trip?: SharedTripLookup; error?: string }> {
+  await requireSession()
+  const normalized = code.trim()
+  if (!normalized) return { error: 'Ingresá el número de viaje' }
+
+  const supabase = await createClient()
+
+  const { data: trip, error: tripError } = await supabase
+    .from('trips')
+    .select('id, code, origin, destination, status')
+    .ilike('code', normalized)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (tripError) return { error: tripError.message }
+  if (!trip) return { error: `No se encontró el viaje ${normalized}` }
+
+  if (options.excludeTripIds?.includes(trip.id)) {
+    return { error: 'Ese viaje ya está en esta proforma' }
+  }
+
+  const { data: proformas, error: proformasError } = await supabase
+    .from('proformas')
+    .select('id, proforma_number, client_name, status, trip_ids')
+    .contains('trip_ids', [trip.id])
+    .is('deleted_at', null)
+    .in('status', ['pendiente', 'facturada', 'cobrada'])
+
+  if (proformasError) return { error: proformasError.message }
+
+  const others = (proformas ?? []).filter((p) => p.id !== options.excludeProformaId)
+  if (others.length === 0) {
+    return {
+      error:
+        'Ese viaje no está en otra proforma. Usá “Elegir viajes” para agregarlo como viaje libre.',
+    }
+  }
+
+  return {
+    trip: {
+      tripId: trip.id,
+      code: trip.code,
+      origin: trip.origin ?? '',
+      destination: trip.destination,
+      status: trip.status,
+      existingProformas: others.map((p) => ({
+        id: p.id,
+        proformaNumber: p.proforma_number,
+        clientName: p.client_name,
+        status: p.status,
+      })),
+    },
+  }
+}
+

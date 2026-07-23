@@ -11,8 +11,10 @@ import { FormSheet } from '@/components/ui/form-sheet'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { AddTripsDialog } from '@/components/proformas/add-trips-dialog'
+import { AddSharedTripDialog } from '@/components/proformas/add-shared-trip-dialog'
 import { SelectedTripsEditor } from '@/components/proformas/selected-trips-editor'
 import { updateProforma } from '@/lib/actions/proformas'
+import type { SharedTripLookup } from '@/lib/actions/proformas'
 import { generateProformaDownloadUrl, generateProformaUploadUrl } from '@/lib/actions/proforma-file'
 import {
   buildTripLineFromEstimate,
@@ -49,6 +51,7 @@ type EditProformaSheetProps = {
   invoice: Invoice | null
   billableTrips: Trip[]
   allTrips: Trip[]
+  initiallySharedTripIds?: string[]
   onRequestDelete: (proforma: Proforma) => void
   canViewInvoices?: boolean
 }
@@ -77,6 +80,7 @@ export function EditProformaSheet({
   invoice,
   billableTrips,
   allTrips,
+  initiallySharedTripIds = [],
   onRequestDelete,
   canViewInvoices = false,
 }: EditProformaSheetProps) {
@@ -85,7 +89,9 @@ export function EditProformaSheet({
   const [pdfDownloading, setPdfDownloading] = useState(false)
   const [selectedTripIds, setSelectedTripIds] = useState<string[]>([])
   const [tripLines, setTripLines] = useState<Record<string, TripLineValues>>({})
+  const [sharedTripIds, setSharedTripIds] = useState<Set<string>>(() => new Set())
   const [addTripsOpen, setAddTripsOpen] = useState(false)
+  const [addSharedOpen, setAddSharedOpen] = useState(false)
   const [updateState, updateAction, updatePending] = useActionState(updateProforma, initialState)
 
   useEffect(() => {
@@ -96,9 +102,11 @@ export function EditProformaSheet({
           : [...proforma.tripIds]
       )
       setTripLines(buildTripLinesState(proforma))
+      setSharedTripIds(new Set(initiallySharedTripIds))
       setAddTripsOpen(false)
+      setAddSharedOpen(false)
     }
-  }, [open, proforma])
+  }, [open, proforma, initiallySharedTripIds])
 
   useEffect(() => {
     if (updateState.success) {
@@ -163,6 +171,11 @@ export function EditProformaSheet({
       delete next[tripId]
       return next
     })
+    setSharedTripIds((shared) => {
+      const next = new Set(shared)
+      next.delete(tripId)
+      return next
+    })
   }
 
   const updateTripLine = (tripId: string, value: string) => {
@@ -190,6 +203,26 @@ export function EditProformaSheet({
         if (!tripIds.includes(id)) delete next[id]
       }
       return next
+    })
+    setSharedTripIds((shared) => {
+      const next = new Set<string>()
+      for (const id of shared) {
+        if (tripIds.includes(id)) next.add(id)
+      }
+      return next
+    })
+  }
+
+  const confirmSharedTrip = (shared: SharedTripLookup) => {
+    setSelectedTripIds((prev) => (prev.includes(shared.tripId) ? prev : [...prev, shared.tripId]))
+    setSharedTripIds((prev) => new Set(prev).add(shared.tripId))
+    setTripLines((lines) => {
+      if (lines[shared.tripId]) return lines
+      const trip = getTrip(shared.tripId)
+      return {
+        ...lines,
+        [shared.tripId]: trip ? buildTripLineFromEstimate(trip) : { amount: '', taxes: '0' },
+      }
     })
   }
 
@@ -436,14 +469,17 @@ export function EditProformaSheet({
                 trips={allTrips}
                 selectedTripIds={selectedTripIds}
                 tripLines={tripLines}
+                sharedTripIds={sharedTripIds}
                 onRemoveTrip={removeTrip}
                 onUpdateLine={updateTripLine}
                 onAddTrips={() => setAddTripsOpen(true)}
+                onAddSharedTrip={() => setAddSharedOpen(true)}
                 disabled={updatePending}
               />
               <p className="text-xs text-muted-foreground mt-1.5">
                 Podés agregar, quitar o ajustar importes. El neto se recalcula solo
-                {invoice ? ' y también el de la factura vinculada (IVA 21%)' : ''}.
+                {invoice ? ' y también el de la factura vinculada (IVA 21%)' : ''}. Usá “Viaje
+                compartido” solo si el mismo viaje se factura a otro cliente.
               </p>
             </Field>
 
@@ -467,6 +503,14 @@ export function EditProformaSheet({
         selectedTripIds={selectedTripIds}
         tripLines={tripLines}
         onConfirm={confirmTripSelection}
+      />
+
+      <AddSharedTripDialog
+        open={addSharedOpen}
+        onOpenChange={setAddSharedOpen}
+        excludeProformaId={proforma?.id}
+        excludeTripIds={selectedTripIds}
+        onConfirm={confirmSharedTrip}
       />
     </>
   )
