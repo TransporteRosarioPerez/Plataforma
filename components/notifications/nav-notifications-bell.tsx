@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { Bell, CheckCircle2, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,8 +50,11 @@ export function NavNotificationsBell({
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-[360px] p-0">
-        <div className="px-4 py-3">
+      <DropdownMenuContent
+        align="end"
+        className="flex w-[360px] flex-col overflow-x-hidden overflow-y-hidden p-0"
+      >
+        <div className="shrink-0 px-4 py-3">
           <DropdownMenuLabel className="p-0 text-base">Alertas</DropdownMenuLabel>
           <p className="text-xs text-muted-foreground mt-1">
             Avisos preventivos hasta {alertDaysBefore} día{alertDaysBefore === 1 ? '' : 's'} antes
@@ -74,7 +76,7 @@ export function NavNotificationsBell({
           )}
         </div>
 
-        <DropdownMenuSeparator className="m-0" />
+        <DropdownMenuSeparator className="m-0 shrink-0" />
 
         {count === 0 ? (
           <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
@@ -86,7 +88,7 @@ export function NavNotificationsBell({
           </div>
         ) : (
           <>
-            <ScrollArea className="max-h-[320px]">
+            <div className="min-h-0 max-h-[320px] overflow-y-auto overscroll-contain">
               <ul className="py-1">
                 {preview.map((item) => (
                   <li key={item.id}>
@@ -123,15 +125,15 @@ export function NavNotificationsBell({
                   </li>
                 ))}
               </ul>
-            </ScrollArea>
+            </div>
 
             {count > PREVIEW_LIMIT && (
-              <p className="px-4 py-2 text-xs text-muted-foreground border-t">
+              <p className="shrink-0 border-t px-4 py-2 text-xs text-muted-foreground">
                 Mostrando {PREVIEW_LIMIT} de {count} alertas
               </p>
             )}
 
-            <div className="border-t p-2">
+            <div className="shrink-0 border-t bg-popover p-2">
               <Button variant="ghost" size="sm" className="w-full justify-between" asChild>
                 <Link href="/app/documentos">
                   Ver todos los vencimientos

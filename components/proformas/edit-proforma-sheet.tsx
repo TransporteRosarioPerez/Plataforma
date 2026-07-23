@@ -17,6 +17,7 @@ import {
   formatTripLineAmount,
   parseTripLineAmount,
 } from '@/lib/proformas/trip-estimate-amount'
+import { calculateInvoiceAmounts } from '@/lib/invoices/calculate'
 import type { Invoice, Proforma, Trip } from '@/lib/types'
 import type { ActionState } from '@/lib/validations/parse-form'
 import { toast } from 'sonner'
@@ -77,7 +78,7 @@ export function EditProformaSheet({
   const [lineAmounts, setLineAmounts] = useState<Record<string, string>>({})
   const [updateState, updateAction, updatePending] = useActionState(updateProforma, initialState)
 
-  const canEditAmounts = proforma?.status === 'pendiente'
+  const canEditAmounts = Boolean(proforma && (proforma.lineItems.length > 0 || proforma.tripIds.length > 0))
 
   useEffect(() => {
     if (open && proforma) {
@@ -115,6 +116,11 @@ export function EditProformaSheet({
         }))
       ),
     [tripIds, lineAmounts]
+  )
+
+  const invoicePreview = useMemo(
+    () => (invoice && canEditAmounts ? calculateInvoiceAmounts(subtotal) : null),
+    [invoice, canEditAmounts, subtotal]
   )
 
   const handleDownloadPdf = async () => {
@@ -271,9 +277,23 @@ export function EditProformaSheet({
                   {invoice.invoiceNumber}
                 </Link>
                 {' · '}
-                Neto {formatCurrency(invoice.subtotal)} + IVA {formatCurrency(invoice.iva)} ={' '}
-                {formatCurrency(invoice.total)}
+                {invoicePreview ? (
+                  <>
+                    Neto {formatCurrency(invoicePreview.subtotal)} + IVA{' '}
+                    {formatCurrency(invoicePreview.iva)} = {formatCurrency(invoicePreview.total)}
+                  </>
+                ) : (
+                  <>
+                    Neto {formatCurrency(invoice.subtotal)} + IVA {formatCurrency(invoice.iva)} ={' '}
+                    {formatCurrency(invoice.total)}
+                  </>
+                )}
               </p>
+              {invoicePreview && invoicePreview.subtotal !== invoice.subtotal && (
+                <p className="text-xs text-amber-800">
+                  Al guardar se actualizará el neto, IVA y total de esta factura.
+                </p>
+              )}
             </div>
           )}
 
@@ -420,7 +440,8 @@ export function EditProformaSheet({
             )}
             {canEditAmounts && (
               <p className="text-xs text-muted-foreground mt-1.5">
-                Podés ajustar el importe neto de cada viaje. El neto de la proforma se recalcula solo.
+                Podés ajustar el importe neto de cada viaje. El neto de la proforma se recalcula solo
+                {invoice ? ' y también el de la factura vinculada (IVA 21%)' : ''}.
               </p>
             )}
           </Field>

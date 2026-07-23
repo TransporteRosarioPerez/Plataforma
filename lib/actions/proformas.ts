@@ -14,6 +14,7 @@ import {
   applyProformaLineItemsToTrips,
   revertTripsAfterProformaRemoved,
 } from '@/lib/proformas/trip-billing-sync'
+import { calculateInvoiceAmounts } from '@/lib/invoices/calculate'
 
 function normalizeLineItems(raw: { trip_id: string; amount: number; taxes?: number }[]) {
   return raw.map((item) => ({
@@ -230,14 +231,10 @@ export async function updateProforma(
 
   const tripIds: string[] = existing.trip_ids ?? []
   let subtotal = parsed.data.subtotal
-  let lineItems: { trip_id: string; amount: number; taxes: number }[] | null = null
+  let syncedInvoice = false
 
   if (parsed.data.line_items != null && parsed.data.line_items !== '') {
-    if (existing.status !== 'pendiente') {
-      return { error: 'Solo se pueden editar los importes de una proforma pendiente' }
-    }
-
-    lineItems = parseLineItems(parsed.data.line_items)
+    const lineItems = parseLineItems(parsed.data.line_items)
     if (lineItems.length === 0) {
       return { error: 'La proforma debe tener al menos un viaje con importe' }
     }
@@ -267,7 +264,30 @@ export async function updateProforma(
       if (lineError) return { error: lineError.message }
     }
 
-    await applyProformaLineItemsToTrips(supabase, lineItems, 'pending_payment')
+    const tripBillingStatus = existing.status === 'cobrada' ? 'paid' : 'pending_payment'
+    await applyProformaLineItemsToTrips(supabase, lineItems, tripBillingStatus)
+
+    const { data: linkedInvoice } = await supabase
+      .from('invoices')
+      .select('id')
+      .eq('proforma_id', parsed.data.id)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (linkedInvoice) {
+      const amounts = calculateInvoiceAmounts(subtotal)
+      const { error: invoiceError } = await supabase
+        .from('invoices')
+        .update({
+          subtotal: amounts.subtotal,
+          iva: amounts.iva,
+          total: amounts.total,
+        })
+        .eq('id', linkedInvoice.id)
+
+      if (invoiceError) return { error: invoiceError.message }
+      syncedInvoice = true
+    }
   }
 
   const { error } = await supabase
@@ -292,17 +312,24 @@ export async function updateProforma(
     entityType: 'proforma',
     entityId: parsed.data.id,
     entityLabel: parsed.data.proforma_number,
-    summary: `Actualizó la proforma ${parsed.data.proforma_number}`,
+    summary: syncedInvoice
+      ? `Actualizó la proforma ${parsed.data.proforma_number} y recalculó la factura vinculada`
+      : `Actualizó la proforma ${parsed.data.proforma_number}`,
   })
 
   revalidatePath('/app/proformas')
+  revalidatePath('/app/facturas')
   revalidatePath('/app/viajes')
   revalidatePath('/app/reportes')
   for (const tripId of tripIds) {
     revalidatePath(`/app/viajes/${tripId}`)
   }
 
-  return { success: 'Proforma actualizada' }
+  return {
+    success: syncedInvoice
+      ? 'Proforma actualizada. Se recalculó el neto, IVA y total de la factura vinculada.'
+      : 'Proforma actualizada',
+  }
 }
 
 
