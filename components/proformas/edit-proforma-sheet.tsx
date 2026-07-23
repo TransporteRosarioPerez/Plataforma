@@ -28,7 +28,12 @@ import type { ActionState } from '@/lib/validations/parse-form'
 import { toast } from 'sonner'
 
 const formatCurrency = (n: number) =>
-  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 }).format(n)
+  new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n)
 
 const statusLabels: Record<Proforma['status'], string> = {
   pendiente: 'Pendiente',
@@ -118,7 +123,10 @@ export function EditProformaSheet({
   }, [updateState, onOpenChange, router])
 
   const subtotal = useMemo(
-    () => selectedTripIds.reduce((sum, id) => sum + parseTripLineAmount(tripLines[id]?.amount ?? ''), 0),
+    () =>
+      Math.round(
+        selectedTripIds.reduce((sum, id) => sum + parseTripLineAmount(tripLines[id]?.amount ?? ''), 0) * 100
+      ) / 100,
     [selectedTripIds, tripLines]
   )
 

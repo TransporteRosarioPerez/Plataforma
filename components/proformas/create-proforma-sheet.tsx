@@ -27,7 +27,12 @@ import type { Client, Trip } from '@/lib/types'
 import { toast } from 'sonner'
 
 const formatCurrency = (n: number) =>
-  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
+  new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n)
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10)
@@ -88,7 +93,10 @@ export function CreateProformaSheet({
   }
 
   const subtotal = useMemo(
-    () => selectedTripIds.reduce((sum, id) => sum + parseTripLineAmount(tripLines[id]?.amount ?? ''), 0),
+    () =>
+      Math.round(
+        selectedTripIds.reduce((sum, id) => sum + parseTripLineAmount(tripLines[id]?.amount ?? ''), 0) * 100
+      ) / 100,
     [selectedTripIds, tripLines]
   )
 
