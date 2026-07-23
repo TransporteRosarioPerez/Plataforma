@@ -7,7 +7,9 @@ import { Field, FieldLabel } from '@/components/ui/field'
 import type { Trip } from '@/lib/types'
 import {
   amountsMatch,
+  formatTripLineAmount,
   getTripEstimatedAmount,
+  parseTripLineAmount,
   type TripLineValues,
 } from '@/lib/proformas/trip-estimate-amount'
 
@@ -75,8 +77,9 @@ export function SelectedTripsEditor({
       <div className="rounded-lg border divide-y overflow-hidden">
         {selectedTrips.map((trip) => {
           const estimate = getTripEstimatedAmount(trip)
-          const amountNum = Number(tripLines[trip.id]?.amount)
-          const hasAmount = tripLines[trip.id]?.amount !== '' && !Number.isNaN(amountNum)
+          const amountRaw = tripLines[trip.id]?.amount ?? ''
+          const amountNum = parseTripLineAmount(amountRaw)
+          const hasAmount = amountRaw !== '' && amountNum > 0
           const matchesEstimate =
             estimate != null && hasAmount ? amountsMatch(amountNum, estimate) : null
 
@@ -115,7 +118,7 @@ export function SelectedTripsEditor({
                     required
                     placeholder="0"
                     value={tripLines[trip.id]?.amount ?? ''}
-                    onValueChange={(v) => onUpdateLine(trip.id, v !== undefined ? String(v) : '')}
+                    onValueChange={(v) => onUpdateLine(trip.id, formatTripLineAmount(v))}
                     disabled={disabled}
                     className="h-9"
                   />

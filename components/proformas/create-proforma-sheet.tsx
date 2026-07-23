@@ -16,6 +16,7 @@ import { AddTripsDialog } from '@/components/proformas/add-trips-dialog'
 import { SelectedTripsEditor } from '@/components/proformas/selected-trips-editor'
 import {
   buildTripLineFromEstimate,
+  parseTripLineAmount,
   type TripLineValues,
 } from '@/lib/proformas/trip-estimate-amount'
 import { createProforma } from '@/lib/actions/proformas'
@@ -82,7 +83,7 @@ export function CreateProformaSheet({
   }
 
   const subtotal = useMemo(
-    () => selectedTripIds.reduce((sum, id) => sum + (Number(tripLines[id]?.amount) || 0), 0),
+    () => selectedTripIds.reduce((sum, id) => sum + parseTripLineAmount(tripLines[id]?.amount ?? ''), 0),
     [selectedTripIds, tripLines]
   )
 
@@ -93,7 +94,7 @@ export function CreateProformaSheet({
       JSON.stringify(
         selectedTripIds.map((id) => ({
           trip_id: id,
-          amount: Number(tripLines[id]?.amount ?? 0),
+          amount: parseTripLineAmount(tripLines[id]?.amount ?? ''),
           taxes: 0,
         }))
       ),

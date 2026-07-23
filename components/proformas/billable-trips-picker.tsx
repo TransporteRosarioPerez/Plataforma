@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import type { Trip } from '@/lib/types'
-import { getTripEstimatedAmount, type TripLineValues } from '@/lib/proformas/trip-estimate-amount'
+import { formatTripLineAmount, getTripEstimatedAmount, type TripLineValues } from '@/lib/proformas/trip-estimate-amount'
 
 export type { TripLineValues }
 const COMPACT_PAGE_SIZE = 12
@@ -316,7 +316,7 @@ export function BillableTripsPicker({
                             required
                             placeholder="0"
                             value={tripLines[trip.id]?.amount ?? ''}
-                            onValueChange={(v) => onUpdateLine(trip.id, v !== undefined ? String(v) : '')}
+                            onValueChange={(v) => onUpdateLine(trip.id, formatTripLineAmount(v))}
                             disabled={disabled}
                             className="h-8"
                           />
@@ -418,7 +418,7 @@ export function BillableTripsPicker({
                     required
                     placeholder="0"
                     value={tripLines[trip.id]?.amount ?? ''}
-                    onValueChange={(v) => onUpdateLine(trip.id, v !== undefined ? String(v) : '')}
+                    onValueChange={(v) => onUpdateLine(trip.id, formatTripLineAmount(v))}
                     disabled={disabled}
                   />
                 </Field>

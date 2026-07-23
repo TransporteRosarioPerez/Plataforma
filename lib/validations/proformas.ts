@@ -18,4 +18,6 @@ export const updateProformaSchema = z.object({
   notes: z.string().optional(),
   file_name: z.string().optional(),
   file_url: z.string().optional(),
+  /** JSON de líneas; opcional para updates parciales (p. ej. solo PDF). */
+  line_items: z.string().optional(),
 })

@@ -12,7 +12,6 @@ import { AUDIT_ACTIONS } from '@/lib/audit/actions'
 import { logAudit } from '@/lib/audit/log'
 import {
   applyProformaLineItemsToTrips,
-  loadProformaLineAmounts,
   revertTripsAfterProformaRemoved,
 } from '@/lib/proformas/trip-billing-sync'
 
@@ -229,13 +228,55 @@ export async function updateProforma(
 
   if (fetchError || !existing) return { error: 'Proforma no encontrada' }
 
+  const tripIds: string[] = existing.trip_ids ?? []
+  let subtotal = parsed.data.subtotal
+  let lineItems: { trip_id: string; amount: number; taxes: number }[] | null = null
+
+  if (parsed.data.line_items != null && parsed.data.line_items !== '') {
+    if (existing.status !== 'pendiente') {
+      return { error: 'Solo se pueden editar los importes de una proforma pendiente' }
+    }
+
+    lineItems = parseLineItems(parsed.data.line_items)
+    if (lineItems.length === 0) {
+      return { error: 'La proforma debe tener al menos un viaje con importe' }
+    }
+
+    const existingTripIds = new Set(tripIds)
+    const submittedTripIds = lineItems.map((item) => item.trip_id)
+    if (
+      submittedTripIds.length !== existingTripIds.size ||
+      submittedTripIds.some((id) => !existingTripIds.has(id))
+    ) {
+      return { error: 'No se pueden agregar ni quitar viajes al editar la proforma' }
+    }
+
+    if (lineItems.some((item) => item.amount <= 0)) {
+      return { error: 'Cada viaje debe tener un importe mayor a 0 en la proforma' }
+    }
+
+    subtotal = sumLineItems(lineItems).subtotal
+
+    for (const item of lineItems) {
+      const { error: lineError } = await supabase
+        .from('proforma_line_items')
+        .update({ amount: item.amount, taxes: 0 })
+        .eq('proforma_id', parsed.data.id)
+        .eq('trip_id', item.trip_id)
+
+      if (lineError) return { error: lineError.message }
+    }
+
+    await applyProformaLineItemsToTrips(supabase, lineItems, 'pending_payment')
+  }
+
   const { error } = await supabase
     .from('proformas')
     .update({
       proforma_number: parsed.data.proforma_number,
-      subtotal: parsed.data.subtotal,
+      subtotal,
       taxes: 0,
-      total: parsed.data.subtotal,
+      total: subtotal,
       received_date: parsed.data.received_date,
       notes: parsed.data.notes || null,
       ...(parsed.data.file_url
@@ -254,8 +295,6 @@ export async function updateProforma(
     summary: `Actualizó la proforma ${parsed.data.proforma_number}`,
   })
 
-  const tripIds: string[] = existing.trip_ids ?? []
-
   revalidatePath('/app/proformas')
   revalidatePath('/app/viajes')
   revalidatePath('/app/reportes')
@@ -265,6 +304,7 @@ export async function updateProforma(
 
   return { success: 'Proforma actualizada' }
 }
+
 
 export async function deleteProforma(id: string): Promise<ActionState> {
   await requireSession()

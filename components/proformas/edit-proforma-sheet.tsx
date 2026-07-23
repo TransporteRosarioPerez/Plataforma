@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useState } from 'react'
+import { useActionState, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Download, Loader2, Route, Trash2, Upload } from 'lucide-react'
@@ -10,14 +10,19 @@ import { Badge } from '@/components/ui/badge'
 import { FormSheet } from '@/components/ui/form-sheet'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
+import { NumberInput } from '@/components/ui/number-input'
 import { updateProforma } from '@/lib/actions/proformas'
 import { generateProformaDownloadUrl, generateProformaUploadUrl } from '@/lib/actions/proforma-file'
+import {
+  formatTripLineAmount,
+  parseTripLineAmount,
+} from '@/lib/proformas/trip-estimate-amount'
 import type { Invoice, Proforma, Trip } from '@/lib/types'
 import type { ActionState } from '@/lib/validations/parse-form'
 import { toast } from 'sonner'
 
 const formatCurrency = (n: number) =>
-  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
+  new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 }).format(n)
 
 const statusLabels: Record<Proforma['status'], string> = {
   pendiente: 'Pendiente',
@@ -43,6 +48,20 @@ type EditProformaSheetProps = {
   canViewInvoices?: boolean
 }
 
+function buildAmountState(proforma: Proforma): Record<string, string> {
+  const next: Record<string, string> = {}
+  if (proforma.lineItems.length > 0) {
+    for (const line of proforma.lineItems) {
+      next[line.tripId] = formatTripLineAmount(line.amount)
+    }
+    return next
+  }
+  for (const tripId of proforma.tripIds) {
+    next[tripId] = ''
+  }
+  return next
+}
+
 export function EditProformaSheet({
   open,
   onOpenChange,
@@ -55,7 +74,16 @@ export function EditProformaSheet({
   const router = useRouter()
   const [pdfUploading, setPdfUploading] = useState(false)
   const [pdfDownloading, setPdfDownloading] = useState(false)
+  const [lineAmounts, setLineAmounts] = useState<Record<string, string>>({})
   const [updateState, updateAction, updatePending] = useActionState(updateProforma, initialState)
+
+  const canEditAmounts = proforma?.status === 'pendiente'
+
+  useEffect(() => {
+    if (open && proforma) {
+      setLineAmounts(buildAmountState(proforma))
+    }
+  }, [open, proforma])
 
   useEffect(() => {
     if (updateState.success) {
@@ -65,6 +93,29 @@ export function EditProformaSheet({
     }
     if (updateState.error) toast.error(updateState.error)
   }, [updateState, onOpenChange, router])
+
+  const tripIds = useMemo(() => {
+    if (!proforma) return []
+    if (proforma.lineItems.length > 0) return proforma.lineItems.map((line) => line.tripId)
+    return proforma.tripIds
+  }, [proforma])
+
+  const subtotal = useMemo(
+    () => tripIds.reduce((sum, id) => sum + parseTripLineAmount(lineAmounts[id] ?? ''), 0),
+    [tripIds, lineAmounts]
+  )
+
+  const lineItemsJson = useMemo(
+    () =>
+      JSON.stringify(
+        tripIds.map((id) => ({
+          trip_id: id,
+          amount: parseTripLineAmount(lineAmounts[id] ?? ''),
+          taxes: 0,
+        }))
+      ),
+    [tripIds, lineAmounts]
+  )
 
   const handleDownloadPdf = async () => {
     if (!proforma) return
@@ -129,7 +180,7 @@ export function EditProformaSheet({
       onOpenChange={onOpenChange}
       size="wide"
       title="Editar proforma"
-      description={proforma ? `${proforma.clientName} · Neto ${formatCurrency(proforma.subtotal)}` : undefined}
+      description={proforma ? `${proforma.clientName} · Neto ${formatCurrency(subtotal || proforma.subtotal)}` : undefined}
       footer={
         proforma ? (
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
@@ -159,6 +210,8 @@ export function EditProformaSheet({
       {proforma && (
         <form id="edit-proforma-form" action={updateAction} className="space-y-4">
           <input type="hidden" name="id" value={proforma.id} />
+          <input type="hidden" name="subtotal" value={canEditAmounts ? subtotal : proforma.subtotal} />
+          {canEditAmounts ? <input type="hidden" name="line_items" value={lineItemsJson} /> : null}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field>
@@ -278,53 +331,98 @@ export function EditProformaSheet({
 
           <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3">
             <span className="text-sm text-muted-foreground">Neto (sin IVA)</span>
-            <span className="text-lg font-semibold tabular-nums">{formatCurrency(proforma.subtotal)}</span>
+            <span className="text-lg font-semibold tabular-nums">
+              {formatCurrency(canEditAmounts ? subtotal : proforma.subtotal)}
+            </span>
           </div>
-          <input type="hidden" name="subtotal" value={proforma.subtotal} />
 
           <Field>
             <FieldLabel>Viajes incluidos ({proforma.tripIds.length})</FieldLabel>
-            <ul className="max-h-48 divide-y overflow-y-auto rounded-md border">
-              {proforma.lineItems.length > 0 ? (
-                proforma.lineItems.map((line) => {
-                  const trip = trips.find((t) => t.id === line.tripId)
-                  return (
-                    <li key={line.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                      <Link
-                        href={`/app/viajes/${line.tripId}`}
-                        className="font-mono hover:underline"
-                        onClick={() => onOpenChange(false)}
-                      >
-                        {trip?.code ?? line.tripId.slice(0, 8)}
-                      </Link>
-                      <span className="text-xs text-muted-foreground">{formatCurrency(line.amount)}</span>
-                    </li>
-                  )
-                })
-              ) : editingTrips.length > 0 ? (
-                editingTrips.map((trip) => (
-                  <li key={trip.id} className="flex items-center justify-between px-3 py-2 text-sm">
+            {canEditAmounts && (proforma.lineItems.length > 0 || editingTrips.length > 0) ? (
+              <div className="max-h-64 divide-y overflow-y-auto rounded-md border">
+                {(proforma.lineItems.length > 0
+                  ? proforma.lineItems.map((line) => {
+                      const trip = trips.find((t) => t.id === line.tripId)
+                      return { tripId: line.tripId, code: trip?.code ?? line.tripId.slice(0, 8) }
+                    })
+                  : editingTrips.map((trip) => ({ tripId: trip.id, code: trip.code }))
+                ).map(({ tripId, code }) => (
+                  <div key={tripId} className="flex items-center gap-3 px-3 py-2.5">
                     <Link
-                      href={`/app/viajes/${trip.id}`}
-                      className="flex items-center gap-2 hover:underline"
+                      href={`/app/viajes/${tripId}`}
+                      className="font-mono text-sm hover:underline shrink-0"
                       onClick={() => onOpenChange(false)}
                     >
-                      <Route className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="font-mono">{trip.code}</span>
+                      {code}
                     </Link>
-                    <span className="text-muted-foreground">
-                      {trip.totalIncome > 0 ? formatCurrency(trip.totalIncome) : '—'}
-                    </span>
-                  </li>
-                ))
-              ) : (
-                proforma.tripIds.map((id) => (
-                  <li key={id} className="px-3 py-2 text-sm font-mono text-muted-foreground">
-                    {id.slice(0, 8)}
-                  </li>
-                ))
-              )}
-            </ul>
+                    <div className="ml-auto w-36">
+                      <NumberInput
+                        min={0}
+                        decimals={2}
+                        required
+                        placeholder="0"
+                        value={lineAmounts[tripId] ?? ''}
+                        onValueChange={(v) =>
+                          setLineAmounts((prev) => ({
+                            ...prev,
+                            [tripId]: formatTripLineAmount(v),
+                          }))
+                        }
+                        disabled={updatePending}
+                        className="h-9 text-right"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <ul className="max-h-48 divide-y overflow-y-auto rounded-md border">
+                {proforma.lineItems.length > 0 ? (
+                  proforma.lineItems.map((line) => {
+                    const trip = trips.find((t) => t.id === line.tripId)
+                    return (
+                      <li key={line.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                        <Link
+                          href={`/app/viajes/${line.tripId}`}
+                          className="font-mono hover:underline"
+                          onClick={() => onOpenChange(false)}
+                        >
+                          {trip?.code ?? line.tripId.slice(0, 8)}
+                        </Link>
+                        <span className="text-xs text-muted-foreground">{formatCurrency(line.amount)}</span>
+                      </li>
+                    )
+                  })
+                ) : editingTrips.length > 0 ? (
+                  editingTrips.map((trip) => (
+                    <li key={trip.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                      <Link
+                        href={`/app/viajes/${trip.id}`}
+                        className="flex items-center gap-2 hover:underline"
+                        onClick={() => onOpenChange(false)}
+                      >
+                        <Route className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="font-mono">{trip.code}</span>
+                      </Link>
+                      <span className="text-muted-foreground">
+                        {trip.totalIncome > 0 ? formatCurrency(trip.totalIncome) : '—'}
+                      </span>
+                    </li>
+                  ))
+                ) : (
+                  proforma.tripIds.map((id) => (
+                    <li key={id} className="px-3 py-2 text-sm font-mono text-muted-foreground">
+                      {id.slice(0, 8)}
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
+            {canEditAmounts && (
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Podés ajustar el importe neto de cada viaje. El neto de la proforma se recalcula solo.
+              </p>
+            )}
           </Field>
 
           <Field>

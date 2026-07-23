@@ -7,6 +7,7 @@ import {
   formatGroupedNumber,
   formatGroupedNumberInput,
   parseGroupedNumber,
+  sanitizeGroupedNumberInput,
 } from '@/lib/format/numbers'
 
 type NumberInputProps = Omit<
@@ -71,7 +72,7 @@ export function NumberInput({
   }
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const next = event.target.value
+    const next = sanitizeGroupedNumberInput(event.target.value, decimals)
     setDisplay(next)
     onValueChange?.(parseGroupedNumber(next))
   }

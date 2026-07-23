@@ -1,4 +1,5 @@
 import type { Trip } from '@/lib/types'
+import { formatGroupedNumber, parseGroupedNumber } from '@/lib/format/numbers'
 
 export type TripLineValues = { amount: string; taxes: string; fromEstimate?: boolean }
 
@@ -12,11 +13,21 @@ export function amountsMatch(a: number, b: number, tolerance = 0.01): boolean {
   return Math.abs(a - b) <= tolerance
 }
 
+/** Guarda el monto en formato es-AR para que NumberInput no lo re-parsee como miles. */
+export function formatTripLineAmount(amount: number | undefined): string {
+  if (amount === undefined) return ''
+  return formatGroupedNumber(amount, { decimals: 2 })
+}
+
+export function parseTripLineAmount(amount: string): number {
+  return parseGroupedNumber(amount) ?? 0
+}
+
 export function buildTripLineFromEstimate(trip: Trip): TripLineValues {
   const estimate = getTripEstimatedAmount(trip)
   if (estimate == null) return { amount: '', taxes: '0' }
   return {
-    amount: String(Math.round(estimate * 100) / 100),
+    amount: formatTripLineAmount(Math.round(estimate * 100) / 100),
     taxes: '0',
     fromEstimate: true,
   }
