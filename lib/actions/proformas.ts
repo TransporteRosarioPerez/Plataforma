@@ -229,9 +229,10 @@ export async function updateProforma(
 
   if (fetchError || !existing) return { error: 'Proforma no encontrada' }
 
-  const tripIds: string[] = existing.trip_ids ?? []
+  const previousTripIds: string[] = existing.trip_ids ?? []
   let subtotal = parsed.data.subtotal
   let syncedInvoice = false
+  let nextTripIds = previousTripIds
 
   if (parsed.data.line_items != null && parsed.data.line_items !== '') {
     const lineItems = parseLineItems(parsed.data.line_items)
@@ -239,29 +240,47 @@ export async function updateProforma(
       return { error: 'La proforma debe tener al menos un viaje con importe' }
     }
 
-    const existingTripIds = new Set(tripIds)
-    const submittedTripIds = lineItems.map((item) => item.trip_id)
-    if (
-      submittedTripIds.length !== existingTripIds.size ||
-      submittedTripIds.some((id) => !existingTripIds.has(id))
-    ) {
-      return { error: 'No se pueden agregar ni quitar viajes al editar la proforma' }
-    }
-
     if (lineItems.some((item) => item.amount <= 0)) {
       return { error: 'Cada viaje debe tener un importe mayor a 0 en la proforma' }
     }
 
+    nextTripIds = lineItems.map((item) => item.trip_id)
+    const previousSet = new Set(previousTripIds)
+    const nextSet = new Set(nextTripIds)
+    const addedTripIds = nextTripIds.filter((id) => !previousSet.has(id))
+    const removedTripIds = previousTripIds.filter((id) => !nextSet.has(id))
+
+    if (addedTripIds.length > 0) {
+      const validationError = await validateTripsForProforma(
+        supabase,
+        addedTripIds,
+        parsed.data.id
+      )
+      if (validationError) return validationError
+    }
+
     subtotal = sumLineItems(lineItems).subtotal
 
-    for (const item of lineItems) {
-      const { error: lineError } = await supabase
-        .from('proforma_line_items')
-        .update({ amount: item.amount, taxes: 0 })
-        .eq('proforma_id', parsed.data.id)
-        .eq('trip_id', item.trip_id)
+    const { error: deleteLinesError } = await supabase
+      .from('proforma_line_items')
+      .delete()
+      .eq('proforma_id', parsed.data.id)
 
-      if (lineError) return { error: lineError.message }
+    if (deleteLinesError) return { error: deleteLinesError.message }
+
+    const { error: insertLinesError } = await supabase.from('proforma_line_items').insert(
+      lineItems.map((item) => ({
+        proforma_id: parsed.data.id,
+        trip_id: item.trip_id,
+        amount: item.amount,
+        taxes: 0,
+      }))
+    )
+
+    if (insertLinesError) return { error: insertLinesError.message }
+
+    if (removedTripIds.length > 0) {
+      await revertTripsAfterProformaRemoved(supabase, removedTripIds, { force: true })
     }
 
     const tripBillingStatus = existing.status === 'cobrada' ? 'paid' : 'pending_payment'
@@ -282,6 +301,7 @@ export async function updateProforma(
           subtotal: amounts.subtotal,
           iva: amounts.iva,
           total: amounts.total,
+          trip_ids: nextTripIds,
         })
         .eq('id', linkedInvoice.id)
 
@@ -294,6 +314,7 @@ export async function updateProforma(
     .from('proformas')
     .update({
       proforma_number: parsed.data.proforma_number,
+      trip_ids: nextTripIds,
       subtotal,
       taxes: 0,
       total: subtotal,
@@ -317,11 +338,13 @@ export async function updateProforma(
       : `Actualizó la proforma ${parsed.data.proforma_number}`,
   })
 
+  const revalidateTripIds = Array.from(new Set([...previousTripIds, ...nextTripIds]))
+
   revalidatePath('/app/proformas')
   revalidatePath('/app/facturas')
   revalidatePath('/app/viajes')
   revalidatePath('/app/reportes')
-  for (const tripId of tripIds) {
+  for (const tripId of revalidateTripIds) {
     revalidatePath(`/app/viajes/${tripId}`)
   }
 

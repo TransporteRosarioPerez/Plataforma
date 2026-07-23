@@ -39,7 +39,8 @@ export async function applyProformaLineItemsToTrips(
 
 export async function revertTripsAfterProformaRemoved(
   supabase: SupabaseClient,
-  tripIds: string[]
+  tripIds: string[],
+  options: { force?: boolean } = {}
 ) {
   for (const tripId of tripIds) {
     const { data: trip, error } = await supabase
@@ -48,7 +49,8 @@ export async function revertTripsAfterProformaRemoved(
       .eq('id', tripId)
       .single()
 
-    if (error || !trip || trip.status === 'paid') continue
+    if (error || !trip) continue
+    if (!options.force && trip.status === 'paid') continue
 
     const totalExpenses = Number(trip.total_expenses)
 

@@ -102,6 +102,22 @@ export function ProformasView({
       })
   }, [trips, assignedTripIds])
 
+  const editBillableTrips = useMemo(() => {
+    if (!editing) return billableTrips
+    const assignedElsewhere = getAssignedTripIds(proformas, editing.id)
+    return trips
+      .filter(
+        (t) =>
+          editing.tripIds.includes(t.id) ||
+          (OPERATIONAL_TRIP_STATUSES.includes(t.status) && !assignedElsewhere.has(t.id))
+      )
+      .sort((a, b) => {
+        const da = a.departureDate?.getTime() ?? a.createdAt.getTime()
+        const db = b.departureDate?.getTime() ?? b.createdAt.getTime()
+        return db - da
+      })
+  }, [billableTrips, editing, proformas, trips])
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return proformas.filter((p) => {
@@ -281,7 +297,8 @@ export function ProformasView({
         onOpenChange={setEditOpen}
         proforma={editing}
         invoice={editing ? invoicesByProformaId[editing.id] ?? null : null}
-        trips={trips}
+        billableTrips={editBillableTrips}
+        allTrips={trips}
         onRequestDelete={(p) => {
           setToDelete(p)
           setDeleteOpen(true)
