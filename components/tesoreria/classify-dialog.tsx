@@ -17,6 +17,8 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { classifyTransaction, type ClassifyInput } from '@/lib/tesoreria/server/actions-transactions'
 import { suggestPattern } from '@/lib/tesoreria/engine'
+import { isChequeDebit } from '@/lib/tesoreria/cheques'
+import Link from 'next/link'
 import type { TreasuryCategory, TreasuryScope, TreasuryTransaction } from '@/lib/tesoreria/types'
 import { categoriesForAmount, formatDate, formatMoney, kindLabels } from './format'
 
@@ -125,6 +127,13 @@ export function ClassifyDialog({ tx, accountName, categories, onOpenChange }: Pr
             </DialogHeader>
 
             <div className="space-y-4">
+              {isChequeDebit(tx.descriptionNorm, tx.amount) && (
+                <p className="rounded-md border border-blue-200 bg-blue-50/60 px-3 py-2 text-sm dark:border-blue-900 dark:bg-blue-950/40">
+                  Es un cheque{tx.reference ? ` (N° ${tx.reference})` : ''}. Lo mejor es{' '}
+                  <Link href="/app/tesoreria/cheques" className="font-medium underline">registrarlo en Cheques</Link>{' '}
+                  con a quién fue: así queda el beneficiario y se clasifica solo.
+                </p>
+              )}
               <div className="space-y-2">
                 <Label>Categoría</Label>
                 <Select value={categoryId} onValueChange={onCategory}>

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { restoreUpdate } from '@/lib/db/soft-delete'
 import type { ActionState } from '@/lib/validations/parse-form'
 import { revalidateTreasury } from './revalidate'
+import { syncCheque, syncChequesForTransactions } from './cheques-sync'
 
 /**
  * Devuelve el movimiento y, si corresponde, su par creado por el sistema
@@ -37,6 +38,7 @@ export async function restoreTreasuryTransaction(id: string): Promise<ActionStat
   if (error) {
     return { error: duplicateMessage(error.message, 'No se puede recuperar: ese movimiento ya se volvió a importar') }
   }
+  await syncChequesForTransactions(ids)
   revalidateTreasury()
   return { success: 'Movimiento recuperado' }
 }
@@ -61,6 +63,24 @@ export async function restoreTreasuryImportBatch(id: string): Promise<ActionStat
   }
   const { error } = await supabase.from('treasury_import_batches').update(restoreUpdate).eq('id', id)
   if (error) return { error: error.message }
+  const { data: restored } = await supabase
+    .from('treasury_transactions')
+    .select('id')
+    .eq('import_batch_id', id)
+    .is('deleted_at', null)
+  await syncChequesForTransactions((restored ?? []).map((t) => t.id as string))
   revalidateTreasury()
   return { success: 'Importación recuperada con sus movimientos' }
+}
+
+/** Restaura un cheque y lo vuelve a vincular con su débito si ya está importado. */
+export async function restoreTreasuryCheque(id: string): Promise<ActionState> {
+  const supabase = await createClient()
+  const { error } = await supabase.from('treasury_cheques').update(restoreUpdate).eq('id', id)
+  if (error) {
+    return { error: duplicateMessage(error.message, 'No se puede recuperar: ya hay otro cheque activo con ese número') }
+  }
+  await syncCheque(id)
+  revalidateTreasury()
+  return { success: 'Cheque recuperado' }
 }

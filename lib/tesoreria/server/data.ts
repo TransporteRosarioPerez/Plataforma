@@ -5,12 +5,14 @@ import {
   ACCOUNT_COLUMNS,
   BATCH_COLUMNS,
   CATEGORY_COLUMNS,
+  CHEQUE_COLUMNS,
   COUNTERPARTY_COLUMNS,
   RULE_COLUMNS,
   TRANSACTION_COLUMNS,
   mapAccount,
   mapBatch,
   mapCategory,
+  mapCheque,
   mapCounterparty,
   mapRule,
   mapTransaction,
@@ -18,6 +20,7 @@ import {
 import type {
   TreasuryAccount,
   TreasuryCategory,
+  TreasuryCheque,
   TreasuryClassification,
   TreasuryCounterparty,
   TreasuryImportBatch,
@@ -159,3 +162,16 @@ export async function getImportBatches(): Promise<TreasuryImportBatch[]> {
   return (data ?? []).map(mapBatch)
 }
 
+
+export async function getCheques(accountId?: string): Promise<TreasuryCheque[]> {
+  await requireSuperadmin()
+  const supabase = await createClient()
+  return fetchAll((from, to) => {
+    let q = supabase.from('treasury_cheques').select(CHEQUE_COLUMNS).is('deleted_at', null)
+    if (accountId) q = q.eq('account_id', accountId)
+    return q
+      .order('payment_date', { ascending: false, nullsFirst: true })
+      .order('created_at', { ascending: false })
+      .range(from, to)
+  }, mapCheque)
+}

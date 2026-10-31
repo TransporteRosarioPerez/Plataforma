@@ -312,3 +312,82 @@ test('Mercado Pago: PDF → celdas → movimientos', async () => {
   assert.equal(r.rows[2].amount, -500)
   assert.equal(countBalanceBreaks(r.rows), 0)
 })
+
+// ---------------------------------------------------------------------------
+// Cheques
+// ---------------------------------------------------------------------------
+
+function cheque(p: Partial<import('@/lib/tesoreria/types').TreasuryCheque>): import('@/lib/tesoreria/types').TreasuryCheque {
+  return {
+    id: 'ch1',
+    accountId: 'acc-macro',
+    chequeNumber: '69614500',
+    amount: 1334315.44,
+    issueDate: '2026-10-01',
+    paymentDate: '2026-10-14',
+    payeeName: 'Gomería Ruta 9',
+    payeeCuit: null,
+    categoryId: 'c-prov',
+    scope: null,
+    notes: null,
+    status: 'emitido',
+    transactionId: null,
+    ...p,
+  }
+}
+
+test('cheques: reconoce débitos y multas del extracto', async () => {
+  const { isChequeDebit, isChequeRejection } = await import('@/lib/tesoreria/cheques')
+  assert.ok(isChequeDebit('CHEQUE P/CAMARA', -100))
+  assert.ok(isChequeDebit('CHEQUE CANJE INTERNO', -100))
+  assert.ok(!isChequeDebit('COMISION CHEQUE CONSULTA', -100))
+  assert.ok(!isChequeDebit('CHEQUE P/CAMARA', 100)) // un crédito no es un cheque propio
+  assert.ok(isChequeRejection('CARGO MULTA BCRA RECHAZO CH SIN FONDOS'))
+  assert.ok(!isChequeRejection('DEVOLUC MULTA CH RECHAZADO'))
+})
+
+test('cheques: el débito se clasifica con lo que dice el registro', async () => {
+  const { matchCheque, classifyFromCheque } = await import('@/lib/tesoreria/cheques')
+  const tx = { accountId: 'acc-macro', reference: '0069614500', descriptionNorm: 'CHEQUE CANJE INTERNO', amount: -1334315.44 }
+  const m = matchCheque(tx, [cheque({})])
+  assert.equal(m.kind, 'match')
+  if (m.kind !== 'match') return
+  const r = classifyFromCheque(m.cheque, CATS)
+  assert.equal(r.categoryId, 'c-prov')
+  assert.equal(r.scope, 'empresa') // ámbito por defecto de la categoría
+  assert.equal(r.classification, 'auto')
+  assert.equal(r.matchedBy, 'cheque')
+
+  // otra cuenta, otro número o anulado: no matchea
+  assert.equal(matchCheque({ ...tx, accountId: 'acc-nacion' }, [cheque({})]).kind, 'none')
+  assert.equal(matchCheque({ ...tx, reference: '123' }, [cheque({})]).kind, 'none')
+  assert.equal(matchCheque(tx, [cheque({ status: 'anulado' })]).kind, 'none')
+  // mismo número con otro monto: se avisa, no se clasifica
+  assert.equal(matchCheque(tx, [cheque({ amount: 1000 })]).kind, 'amount_mismatch')
+})
+
+test('cheques: estado y cheques por debitar', async () => {
+  const { deriveChequeStatus, chequeOutlook, matchRejectedCheque } = await import('@/lib/tesoreria/cheques')
+  assert.equal(deriveChequeStatus('emitido', true, false), 'debitado')
+  assert.equal(deriveChequeStatus('rechazado', true, true), 'debitado') // se volvió a presentar y se pagó
+  assert.equal(deriveChequeStatus('emitido', false, true), 'rechazado')
+  assert.equal(deriveChequeStatus('anulado', false, true), 'anulado')
+  assert.equal(deriveChequeStatus('debitado', false, false), 'emitido') // se borró el débito
+
+  const rejected = matchRejectedCheque(
+    { accountId: 'acc-macro', reference: '69614500', descriptionNorm: 'CARGO MULTA BCRA RECHAZO CH SIN FONDOS', amount: -50000 },
+    [cheque({})]
+  )
+  assert.equal(rejected?.id, 'ch1')
+
+  const outlook = chequeOutlook(
+    [
+      cheque({ id: 'a', amount: 100, paymentDate: '2026-11-03' }),
+      cheque({ id: 'b', amount: 200, paymentDate: '2026-12-01' }),
+      cheque({ id: 'c', amount: 300, paymentDate: '2026-10-20' }), // ya pasó la fecha
+      cheque({ id: 'd', amount: 999, status: 'debitado' }),
+    ],
+    '2026-10-31'
+  )
+  assert.deepEqual(outlook, { pendingCount: 3, pendingAmount: 600, next7Amount: 400, overdueCount: 1 })
+})

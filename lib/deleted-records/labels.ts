@@ -20,6 +20,7 @@ const ENTITY_LABELS: Record<RestorableEntity, string> = {
   treasury_rule: 'Tesorería · Regla',
   treasury_category: 'Tesorería · Categoría',
   treasury_counterparty: 'Tesorería · Contraparte',
+  treasury_cheque: 'Tesorería · Cheque',
 }
 
 export function getEntityTypeLabel(entity: RestorableEntity): string {

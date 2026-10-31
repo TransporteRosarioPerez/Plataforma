@@ -8,6 +8,7 @@ export type TreasuryClassification = 'pending' | 'auto' | 'manual'
 export type TreasuryRuleMatchType = 'contains' | 'regex' | 'cuit'
 export type TreasuryRuleDirection = 'any' | 'in' | 'out'
 export type TreasurySource = 'import' | 'manual' | 'transfer_mirror'
+export type TreasuryChequeStatus = 'emitido' | 'debitado' | 'rechazado' | 'anulado'
 
 /** Celda tal como sale de SheetJS (sheet_to_json con header: 1, raw: true). */
 export type SheetCell = string | number | boolean | null
@@ -105,6 +106,22 @@ export type TreasuryTransaction = {
   deletedAt: string | null
 }
 
+export type TreasuryCheque = {
+  id: string
+  accountId: string
+  chequeNumber: string
+  amount: number
+  issueDate: string | null
+  paymentDate: string | null
+  payeeName: string
+  payeeCuit: string | null
+  categoryId: string | null
+  scope: TreasuryScope | null
+  notes: string | null
+  status: TreasuryChequeStatus
+  transactionId: string | null
+}
+
 export type TreasuryImportBatch = {
   id: string
   accountId: string
@@ -128,7 +145,7 @@ export type ClassificationResult = {
   isInternal: boolean
   transferAccountId: string | null
   classification: TreasuryClassification
-  matchedBy: 'counterparty' | 'rule' | null
+  matchedBy: 'cheque' | 'counterparty' | 'rule' | null
 }
 
 export type ImportPreviewRow = StatementRow & {
@@ -137,6 +154,10 @@ export type ImportPreviewRow = StatementRow & {
   dedupKey: string
   isDuplicate: boolean
   result: ClassificationResult
+  /** Cheque del registro que corresponde a este débito, si hay. */
+  chequeId: string | null
+  /** Cheque del registro que este movimiento marca como rechazado (multa BCRA). */
+  rejectedChequeId: string | null
 }
 
 export type ImportPreview = {
@@ -152,5 +173,6 @@ export type ImportPreview = {
   autoCount: number
   pendingCount: number
   balanceBreaks: number
+  chequeMatches: number
   errors: string[]
 }

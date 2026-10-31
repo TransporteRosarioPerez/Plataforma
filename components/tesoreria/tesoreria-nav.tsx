@@ -8,6 +8,7 @@ const ITEMS = [
   { href: '/app/tesoreria', label: 'Resumen', exact: true },
   { href: '/app/tesoreria/movimientos', label: 'Movimientos' },
   { href: '/app/tesoreria/pendientes', label: 'Pendientes' },
+  { href: '/app/tesoreria/cheques', label: 'Cheques' },
   { href: '/app/tesoreria/importar', label: 'Importar' },
   { href: '/app/tesoreria/configuracion', label: 'Configuración' },
 ]

@@ -26,6 +26,7 @@ export type AuditEntityType =
   | 'treasury_category'
   | 'treasury_counterparty'
   | 'treasury_account'
+  | 'treasury_cheque'
 
 export type AuditLog = {
   id: string

@@ -80,6 +80,9 @@ export const AUDIT_ACTIONS = {
   treasuryCounterpartyUpsert: 'treasury.counterparty.upsert',
   treasuryConfigDelete: 'treasury.config.delete',
   treasuryAccountUpdate: 'treasury.account.update',
+  treasuryChequeUpsert: 'treasury.cheque.upsert',
+  treasuryChequeStatus: 'treasury.cheque.status',
+  treasuryChequeDelete: 'treasury.cheque.delete',
 } as const
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS]
@@ -166,6 +169,9 @@ export const auditActionLabels: Record<AuditAction, string> = {
   [AUDIT_ACTIONS.treasuryCounterpartyUpsert]: 'Tesorería: contraparte',
   [AUDIT_ACTIONS.treasuryConfigDelete]: 'Tesorería: configuración eliminada',
   [AUDIT_ACTIONS.treasuryAccountUpdate]: 'Tesorería: cuenta',
+  [AUDIT_ACTIONS.treasuryChequeUpsert]: 'Tesorería: cheque',
+  [AUDIT_ACTIONS.treasuryChequeStatus]: 'Tesorería: cheque anulado/reactivado',
+  [AUDIT_ACTIONS.treasuryChequeDelete]: 'Tesorería: cheque eliminado',
 }
 
 export const auditActionOptions = Object.entries(auditActionLabels).map(([value, label]) => ({
@@ -191,6 +197,8 @@ export function getEntityHref(entityType: string | null, entityId: string | null
     case 'treasury_transaction':
     case 'treasury_import_batch':
       return '/app/tesoreria/movimientos'
+    case 'treasury_cheque':
+      return '/app/tesoreria/cheques'
   }
   return null
 }

@@ -10,6 +10,7 @@ import { AUDIT_ACTIONS } from '@/lib/audit/actions'
 import { logAudit } from '@/lib/audit/log'
 import { revalidateTreasury } from './revalidate'
 import { linkedTransactionIds } from './restore'
+import { syncChequesForTransactions } from './cheques-sync'
 import { getCategories, getCounterparties, getRules, getTransactions } from './data'
 import { classify, isValidRulePattern, manualClassification } from '../engine'
 import { normalizeDescription, roundMoney } from '../text'
@@ -372,6 +373,7 @@ export async function deleteTransaction(id: string): Promise<ActionState> {
       .in('id', ids)
       .select('description_raw, amount')
     if (error) return { error: error.message }
+    await syncChequesForTransactions(ids)
     await logAudit({
       action: AUDIT_ACTIONS.treasuryTransactionDelete,
       entityType: 'treasury_transaction',

@@ -67,56 +67,102 @@ type Props = {
   batches: TreasuryImportBatch[]
 }
 
+/** Un archivo dentro de una carga múltiple. */
+type Item = {
+  key: string
+  fileName: string
+  upload?: StatementUpload
+  preview?: ImportPreview
+  error?: string
+  result?: { ok: boolean; message: string }
+}
+
 export function ImportarView({ accounts, categories, batches }: Props) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
   const [loading, setLoading] = useState(false)
   const [confirming, setConfirming] = useState(false)
-  const [preview, setPreview] = useState<ImportPreview | null>(null)
-  const [upload, setUpload] = useState<StatementUpload | null>(null)
+  const [items, setItems] = useState<Item[] | null>(null)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [onlyPending, setOnlyPending] = useState(false)
 
   const accountName = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])
   const categoryName = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories])
 
-  const handleFile = async (file: File) => {
-    const lower = file.name.toLowerCase()
-    if (!ACCEPT.split(',').some((ext) => lower.endsWith(ext))) {
-      toast.error('Subí el Excel del banco (.xls, .xlsx, .csv) o el PDF de Mercado Pago')
-      return
-    }
+  /** Lee todos los archivos y arma una vista previa por archivo (uno por vez). */
+  const handleFiles = async (fileList: FileList | File[]) => {
+    const files = Array.from(fileList)
+    if (files.length === 0) return
     setLoading(true)
-    try {
-      const read = await fileToUpload(file)
-      const result = await previewTreasuryImport(file.name, read)
-      if (result.error || !result.preview) {
-        toast.error(result.error ?? 'No se pudo leer el extracto')
-        return
+    const next: Item[] = []
+    for (const [i, file] of files.entries()) {
+      const key = `${i}-${file.name}`
+      const lower = file.name.toLowerCase()
+      if (!ACCEPT.split(',').some((ext) => lower.endsWith(ext))) {
+        next.push({ key, fileName: file.name, error: 'Formato no soportado: subí el Excel del banco o el PDF de Mercado Pago' })
+        continue
       }
-      setUpload(read)
-      setPreview(result.preview)
-      setOnlyPending(false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo leer el archivo')
-    } finally {
-      setLoading(false)
+      try {
+        const upload = await fileToUpload(file)
+        const result = await previewTreasuryImport(file.name, upload)
+        next.push(
+          result.preview
+            ? { key, fileName: file.name, upload, preview: result.preview }
+            : { key, fileName: file.name, error: result.error ?? 'No se pudo leer el extracto' }
+        )
+      } catch (e) {
+        next.push({ key, fileName: file.name, error: e instanceof Error ? e.message : 'No se pudo leer el archivo' })
+      }
+    }
+    setLoading(false)
+    setItems(next)
+    setSelectedKey(next.find((it) => it.preview)?.key ?? next[0]?.key ?? null)
+    setOnlyPending(false)
+  }
+
+  /**
+   * Importa en orden. El servidor vuelve a calcular cada vista previa al confirmar,
+   * así que si dos archivos de la misma cuenta se superponen, el segundo saltea lo que ya cargó el primero.
+   */
+  const confirm = async () => {
+    if (!items) return
+    setConfirming(true)
+    const updated = [...items]
+    for (const [i, it] of updated.entries()) {
+      if (!it.preview || !it.upload || it.preview.newCount === 0 || it.result?.ok) continue
+      const result = await confirmTreasuryImport(it.fileName, it.upload)
+      updated[i] = {
+        ...it,
+        result: result.error ? { ok: false, message: result.error } : { ok: true, message: result.success ?? 'Importado' },
+      }
+      setItems([...updated])
+    }
+    setConfirming(false)
+    router.refresh()
+    const failed = updated.filter((it) => it.result && !it.result.ok)
+    const done = updated.filter((it) => it.result?.ok)
+    if (failed.length === 0) {
+      toast.success(
+        done.length === 1
+          ? done[0].result!.message
+          : `Importados ${done.length} extractos. Revisá Pendientes: ahí aparecen las transferencias entre cuentas.`
+      )
+      setItems(null)
+    } else {
+      toast.error(`${failed.length} archivo${failed.length === 1 ? '' : 's'} no se pudo importar. Mirá el detalle.`)
     }
   }
 
-  const confirm = async () => {
-    if (!preview || !upload) return
-    setConfirming(true)
-    const result = await confirmTreasuryImport(preview.fileName, upload)
-    setConfirming(false)
-    if (result.error) toast.error(result.error)
-    else {
-      toast.success(result.success)
-      setPreview(null)
-      setUpload(null)
-      router.refresh()
-    }
-  }
+  const ready = (items ?? []).filter((it) => it.preview && it.preview.newCount > 0 && !it.result?.ok)
+  const totalNew = ready.reduce((acc, it) => acc + (it.preview?.newCount ?? 0), 0)
+  const repeatedAccounts = (() => {
+    const seen = new Map<string, number>()
+    for (const it of items ?? []) if (it.preview) seen.set(it.preview.accountId, (seen.get(it.preview.accountId) ?? 0) + 1)
+    return [...seen.values()].some((n) => n > 1)
+  })()
+  const selected = items?.find((it) => it.key === selectedKey) ?? null
+  const preview = selected?.preview ?? null
 
   const onDeleteBatch = async (batch: TreasuryImportBatch) => {
     if (!window.confirm(`¿Enviar a la papelera la importación "${batch.fileName}" y sus ${batch.rowCount} movimientos?`)) return
@@ -155,8 +201,7 @@ export function ImportarView({ accounts, categories, batches }: Props) {
             onDrop={(e) => {
               e.preventDefault()
               setDragging(false)
-              const file = e.dataTransfer.files[0]
-              if (file && !loading) void handleFile(file)
+              if (!loading && e.dataTransfer.files.length) void handleFiles(e.dataTransfer.files)
             }}
             onClick={() => !loading && inputRef.current?.click()}
             className={cn(
@@ -167,17 +212,19 @@ export function ImportarView({ accounts, categories, batches }: Props) {
           >
             <Upload className="h-10 w-10 text-muted-foreground" />
             <p className="text-center text-sm text-muted-foreground">
-              {loading ? 'Leyendo el extracto…' : 'Arrastrá el archivo acá o hacé clic para elegirlo'}
+              {loading
+                ? 'Leyendo los extractos…'
+                : 'Arrastrá uno o varios archivos acá (por ejemplo Macro, Nación y Mercado Pago juntos) o hacé clic para elegirlos'}
             </p>
           </div>
           <input
             ref={inputRef}
             type="file"
             accept={ACCEPT}
+            multiple
             className="hidden"
             onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) void handleFile(file)
+              if (e.target.files?.length) void handleFiles(e.target.files)
               e.target.value = ''
             }}
           />
@@ -236,16 +283,84 @@ export function ImportarView({ accounts, categories, batches }: Props) {
         </CardContent>
       </Card>
 
-      <Dialog open={!!preview} onOpenChange={(o) => !o && !confirming && setPreview(null)}>
-        <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-5xl">
-          {preview && (
+      <Dialog open={!!items} onOpenChange={(o) => !o && !confirming && setItems(null)}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
+          {items && (
             <>
               <DialogHeader>
-                <DialogTitle>Vista previa · {preview.accountName}</DialogTitle>
+                <DialogTitle>
+                  Vista previa · {items.length} archivo{items.length === 1 ? '' : 's'}
+                </DialogTitle>
                 <DialogDescription>
-                  {preview.fileName} · del {formatDate(preview.dateFrom)} al {formatDate(preview.dateTo)}
+                  Revisá cada extracto antes de importar. Hacé clic en un archivo para ver sus movimientos.
                 </DialogDescription>
               </DialogHeader>
+
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Archivo</TableHead>
+                      <TableHead>Cuenta</TableHead>
+                      <TableHead>Período</TableHead>
+                      <TableHead className="text-right">Nuevos</TableHead>
+                      <TableHead className="text-right">Ya cargados</TableHead>
+                      <TableHead className="text-right">Pendientes</TableHead>
+                      <TableHead>Estado</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((it) => (
+                      <TableRow
+                        key={it.key}
+                        onClick={() => it.preview && setSelectedKey(it.key)}
+                        className={cn(it.preview && 'cursor-pointer', it.key === selectedKey && 'bg-muted/60')}
+                      >
+                        <TableCell className="max-w-[220px] truncate" title={it.fileName}>{it.fileName}</TableCell>
+                        <TableCell>{it.preview?.accountName ?? '—'}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {it.preview ? `${formatDate(it.preview.dateFrom)} – ${formatDate(it.preview.dateTo)}` : '—'}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{it.preview?.newCount ?? '—'}</TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">{it.preview?.duplicateCount ?? '—'}</TableCell>
+                        <TableCell className="text-right tabular-nums">{it.preview?.pendingCount ?? '—'}</TableCell>
+                        <TableCell className="text-sm">
+                          {it.result ? (
+                            <span className={it.result.ok ? 'text-green-700 dark:text-green-400' : 'text-destructive'}>
+                              {it.result.ok ? '✓ Importado' : it.result.message}
+                            </span>
+                          ) : it.error ? (
+                            <span className="text-destructive">{it.error}</span>
+                          ) : it.preview && it.preview.newCount === 0 ? (
+                            <span className="text-muted-foreground">Nada nuevo</span>
+                          ) : it.preview && (it.preview.balanceBreaks > 0 || it.preview.errors.length > 0) ? (
+                            <span className="text-amber-700 dark:text-amber-400">Listo, con avisos</span>
+                          ) : (
+                            <span>Listo</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {repeatedAccounts && (
+                <p className="text-xs text-muted-foreground">
+                  Hay más de un archivo de la misma cuenta: si se superponen, al importar se saltean los movimientos repetidos.
+                </p>
+              )}
+
+              {preview && (
+                <div className="space-y-3 border-t pt-3">
+                  <p className="text-sm font-medium">
+                    {preview.accountName} · {preview.fileName}
+                    {preview.chequeMatches > 0 && (
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        {preview.chequeMatches} cheque{preview.chequeMatches === 1 ? '' : 's'} del registro vinculado{preview.chequeMatches === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </p>
 
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <Stat label="Nuevos" value={preview.newCount} />
@@ -310,11 +425,19 @@ export function ImportarView({ accounts, categories, batches }: Props) {
                   </TableBody>
                 </Table>
               </div>
+                </div>
+              )}
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setPreview(null)} disabled={confirming}>Cancelar</Button>
-                <Button onClick={confirm} disabled={confirming || preview.newCount === 0}>
-                  {confirming ? 'Importando…' : `Importar ${preview.newCount} movimientos`}
+                <Button variant="outline" onClick={() => setItems(null)} disabled={confirming}>
+                  {items.some((it) => it.result?.ok) ? 'Cerrar' : 'Cancelar'}
+                </Button>
+                <Button onClick={confirm} disabled={confirming || ready.length === 0}>
+                  {confirming
+                    ? 'Importando…'
+                    : ready.length > 1
+                      ? `Importar ${ready.length} extractos (${totalNew} movimientos)`
+                      : `Importar ${totalNew} movimientos`}
                 </Button>
               </DialogFooter>
             </>

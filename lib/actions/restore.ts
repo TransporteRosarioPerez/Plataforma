@@ -14,6 +14,7 @@ import {
 } from '@/lib/proformas/trip-billing-sync'
 import { recalculateTripTotals } from '@/lib/trip-totals'
 import {
+  restoreTreasuryCheque,
   restoreTreasuryImportBatch,
   restoreTreasuryTransaction,
 } from '@/lib/tesoreria/server/restore'
@@ -38,6 +39,7 @@ export type RestorableEntity =
   | 'treasury_rule'
   | 'treasury_category'
   | 'treasury_counterparty'
+  | 'treasury_cheque'
 
 const TABLE_BY_ENTITY: Record<RestorableEntity, string> = {
   client: 'clients',
@@ -59,6 +61,7 @@ const TABLE_BY_ENTITY: Record<RestorableEntity, string> = {
   treasury_rule: 'treasury_rules',
   treasury_category: 'treasury_categories',
   treasury_counterparty: 'treasury_counterparties',
+  treasury_cheque: 'treasury_cheques',
 }
 
 function revalidateForEntity(entity: RestorableEntity, extra?: { tripId?: string; entityType?: string; entityId?: string; itemId?: string }) {
@@ -123,6 +126,7 @@ function revalidateForEntity(entity: RestorableEntity, extra?: { tripId?: string
     case 'treasury_rule':
     case 'treasury_category':
     case 'treasury_counterparty':
+    case 'treasury_cheque':
       revalidatePath('/app/tesoreria', 'layout')
       break
   }
@@ -335,11 +339,13 @@ export async function restoreRecord(
   }
 
   // Tesorería: el movimiento vuelve con su espejo; la importación, con sus movimientos.
-  if (entity === 'treasury_transaction' || entity === 'treasury_import_batch') {
+  if (entity === 'treasury_transaction' || entity === 'treasury_import_batch' || entity === 'treasury_cheque') {
     const result =
       entity === 'treasury_transaction'
         ? await restoreTreasuryTransaction(id)
-        : await restoreTreasuryImportBatch(id)
+        : entity === 'treasury_import_batch'
+          ? await restoreTreasuryImportBatch(id)
+          : await restoreTreasuryCheque(id)
     if (result.success) {
       revalidateForEntity(entity)
       await logRestoreAudit(entity, id)

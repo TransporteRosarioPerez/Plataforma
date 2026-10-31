@@ -14,11 +14,14 @@ import {
   getCategories,
   getCounterparties,
   getExistingDedupKeys,
+  getCheques,
   getRules,
 } from './data'
 import { parseStatement, providerLabel } from '../parsers'
 import { isMercadoPagoText, parseMercadoPagoText } from '../mercadopago'
 import { extractPdfText } from './pdf'
+import { syncCheque, syncChequesForTransactions } from './cheques-sync'
+import { classifyFromCheque, matchCheque, matchRejectedCheque } from '../cheques'
 import { buildDedupKeys, classify, countBalanceBreaks } from '../engine'
 import { extractCuit, normalizeDescription } from '../text'
 import type { ImportPreview, ImportPreviewRow, SheetCell } from '../types'
@@ -80,11 +83,13 @@ async function buildPreview(fileName: string, upload: unknown): Promise<ImportPr
     throw new Error(`No hay una cuenta activa configurada para ${providerLabel(statement.provider)}`)
   }
 
-  const [rules, counterparties, categories] = await Promise.all([
+  const [rules, counterparties, categories, cheques] = await Promise.all([
     getRules(),
     getCounterparties(),
     getCategories(),
+    getCheques(account.id),
   ])
+  const chequeWarnings: string[] = []
   const activeCategories = categories.filter((c) => c.isActive)
   const activeRules = rules.filter(
     (r) => r.isActive && (!r.categoryId || activeCategories.some((c) => c.id === r.categoryId))
@@ -96,20 +101,33 @@ async function buildPreview(fileName: string, upload: unknown): Promise<ImportPr
   const rows: ImportPreviewRow[] = statement.rows.map((row, i) => {
     const descriptionNorm = normalizeDescription(row.description)
     const counterpartyCuit = extractCuit(row.description)
+    const chequeInput = { accountId: account.id, reference: row.reference, descriptionNorm, amount: row.amount }
+    const chequeMatch = matchCheque(chequeInput, cheques)
+    if (chequeMatch.kind === 'amount_mismatch' && !existing.has(keys[i])) {
+      chequeWarnings.push(
+        `Cheque N° ${chequeMatch.cheque.chequeNumber}: el banco debitó ${(-row.amount).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })} y en el registro figura por ${chequeMatch.cheque.amount.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}`
+      )
+    }
+    const ruleResult = classify(
+      { descriptionNorm, amount: row.amount, accountId: account.id, counterpartyCuit },
+      activeRules,
+      counterparties,
+      activeCategories
+    )
+    const fromCheque = chequeMatch.kind === 'match' ? classifyFromCheque(chequeMatch.cheque, activeCategories) : null
     return {
       ...row,
       descriptionNorm,
       counterpartyCuit,
       dedupKey: keys[i],
       isDuplicate: existing.has(keys[i]),
-      result: classify(
-        { descriptionNorm, amount: row.amount, accountId: account.id, counterpartyCuit },
-        activeRules,
-        counterparties,
-        activeCategories
-      ),
+      // El cheque registrado manda sobre las reglas (si el cheque no tiene categoría, quedan las reglas).
+      result: fromCheque && fromCheque.classification === 'auto' ? fromCheque : ruleResult,
+      chequeId: chequeMatch.kind === 'match' ? chequeMatch.cheque.id : null,
+      rejectedChequeId: matchRejectedCheque(chequeInput, cheques)?.id ?? null,
     }
   })
+  statement.errors.push(...chequeWarnings)
 
   const fresh = rows.filter((r) => !r.isDuplicate)
   const dates = statement.rows.map((r) => r.txDate).sort()
@@ -126,6 +144,7 @@ async function buildPreview(fileName: string, upload: unknown): Promise<ImportPr
     autoCount: fresh.filter((r) => r.result.classification === 'auto').length,
     pendingCount: fresh.filter((r) => r.result.classification === 'pending').length,
     balanceBreaks: countBalanceBreaks(statement.rows),
+    chequeMatches: fresh.filter((r) => r.chequeId).length,
     errors: statement.errors,
   }
 }
@@ -233,6 +252,12 @@ export async function confirmTreasuryImport(
       }
     }
 
+    // Cheques del registro: quedan "debitados" (o "rechazados" si vino la multa).
+    const chequeIds = new Set(
+      fresh.flatMap((r) => [r.chequeId, r.rejectedChequeId]).filter((id): id is string => !!id)
+    )
+    for (const chequeId of chequeIds) await syncCheque(chequeId)
+
     await logAudit({
       action: AUDIT_ACTIONS.treasuryImportConfirm,
       entityType: 'treasury_import_batch',
@@ -246,11 +271,12 @@ export async function confirmTreasuryImport(
         pending: preview.pendingCount,
         duplicates: preview.duplicateCount,
         balanceBreaks: preview.balanceBreaks,
+        chequeMatches: preview.chequeMatches,
       },
     })
     revalidateTreasury()
     return {
-      success: `Importados ${fresh.length} movimientos: ${preview.autoCount} clasificados, ${preview.pendingCount} pendientes`,
+      success: `Importados ${fresh.length} movimientos: ${preview.autoCount} clasificados, ${preview.pendingCount} pendientes${preview.chequeMatches ? ` · ${preview.chequeMatches} cheques vinculados` : ''}`,
       imported: fresh.length,
     }
   } catch (e) {
@@ -264,12 +290,15 @@ export async function deleteImportBatch(batchId: string): Promise<ActionState> {
     await requireSuperadmin()
     const supabase = await createClient()
     const now = new Date().toISOString()
-    const { error: txError } = await supabase
+    const { data: removed, error: txError } = await supabase
       .from('treasury_transactions')
       .update({ deleted_at: now })
       .eq('import_batch_id', batchId)
       .is('deleted_at', null)
+      .select('id')
     if (txError) return { error: txError.message }
+    // Los cheques que se habían vinculado con estos débitos vuelven a "emitido".
+    await syncChequesForTransactions((removed ?? []).map((t) => t.id as string))
     const { data, error } = await supabase
       .from('treasury_import_batches')
       .update({ deleted_at: now })

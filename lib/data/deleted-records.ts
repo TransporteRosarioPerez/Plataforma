@@ -29,6 +29,7 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
     treasuryRulesRes,
     treasuryCategoriesRes,
     treasuryCounterpartiesRes,
+    treasuryChequesRes,
   ] = await Promise.all([
     supabase
       .from('clients')
@@ -126,6 +127,11 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
     supabase
       .from('treasury_counterparties')
       .select('id, name, cuit, deleted_at')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false }),
+    supabase
+      .from('treasury_cheques')
+      .select('id, cheque_number, payee_name, amount, deleted_at')
       .not('deleted_at', 'is', null)
       .order('deleted_at', { ascending: false }),
   ])
@@ -306,6 +312,15 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
       id: row.id,
       entity: 'treasury_counterparty',
       label: `${row.name} (${row.cuit})`,
+      deletedAt: new Date(row.deleted_at as string),
+    })
+  }
+
+  for (const row of treasuryChequesRes.data ?? []) {
+    rows.push({
+      id: row.id,
+      entity: 'treasury_cheque',
+      label: `N° ${row.cheque_number} · ${row.payee_name} · ${money.format(Number(row.amount))}`,
       deletedAt: new Date(row.deleted_at as string),
     })
   }

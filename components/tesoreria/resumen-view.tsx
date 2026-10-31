@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/chart'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { AccountBalance, MonthTotal, ScopeFilter, TreasurySummary } from '@/lib/tesoreria/summary'
+import type { ChequeOutlook } from '@/lib/tesoreria/cheques'
 import { formatDate, formatMoney, formatMoneyCompact, formatMonth } from './format'
 
 const chartConfig = {
@@ -30,9 +31,10 @@ type Props = {
   chart: MonthTotal[]
   balances: AccountBalance[]
   hasData: boolean
+  cheques: ChequeOutlook
 }
 
-export function ResumenView({ month, scope, availableMonths, summary, chart, balances, hasData }: Props) {
+export function ResumenView({ month, scope, availableMonths, summary, chart, balances, hasData, cheques }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -186,6 +188,18 @@ export function ResumenView({ month, scope, availableMonths, summary, chart, bal
                 </div>
               )
             })}
+            {cheques.pendingCount > 0 && (
+              <Link href="/app/tesoreria/cheques" className="block rounded-lg border border-blue-200 bg-blue-50/60 p-3 hover:bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-medium">Cheques por debitar</span>
+                  <span className="font-semibold tabular-nums">-{formatMoney(cheques.pendingAmount)}</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {cheques.pendingCount} cheque{cheques.pendingCount === 1 ? '' : 's'} · {formatMoney(cheques.next7Amount)} en los próximos 7 días
+                  {cheques.overdueCount > 0 && ` · ${cheques.overdueCount} con fecha vencida`}
+                </p>
+              </Link>
+            )}
           </CardContent>
         </Card>
       </div>

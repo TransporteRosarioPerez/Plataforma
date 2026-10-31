@@ -6,7 +6,8 @@ separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las
 
 ## Cómo se usa (flujo semanal)
 
-1. **Importar.** Macro y Nación: se descarga el extracto del home banking y se sube el `.xls` tal cual.
+1. **Importar.** Se pueden subir varios archivos juntos (por ejemplo Macro, Nación y Mercado Pago): hay una vista previa por archivo y se importan en orden.
+   Macro y Nación: se descarga el extracto del home banking y se sube el `.xls` tal cual.
    Mercado Pago: se sube el PDF del **Resumen de cuenta**, que es el único formato que ofrece.
    - El banco se detecta por los encabezados del archivo (o por el texto del PDF).
    - Antes de guardar hay una vista previa que muestra:
@@ -17,8 +18,13 @@ separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las
    - Al clasificar se puede "enseñar" al sistema de dos maneras: recordar el CUIT de la contraparte o crear una regla por texto.
    - En los dos casos, los demás pendientes que coinciden se clasifican solos.
    - En la misma pantalla aparecen las posibles **transferencias entre cuentas propias**: mismo monto, en otra cuenta, con ±2 días de diferencia. Se confirman con un clic.
-3. **Movimientos.** Tabla con filtros y edición. Desde acá se carga a mano el **efectivo** y las transferencias entre cuentas.
-4. **Resumen.** Muestra para el mes elegido:
+3. **Cheques.** Cada cheque que se entrega se registra con número, monto, beneficiario, fecha de pago y categoría.
+   - El banco sólo informa "CHEQUE P/CAMARA" o "CHEQUE CANJE INTERNO" y el número va en la referencia. Cuando llega el débito, se vincula solo con el cheque registrado (misma cuenta, mismo número, mismo monto) y se clasifica con sus datos.
+   - Si el cheque se registra después de importar el débito, también se vincula al guardarlo.
+   - Las multas por rechazo (que traen el número de cheque) lo marcan como **rechazado**.
+   - Se ve cuánto hay en cheques emitidos que todavía no se debitaron (y cuánto vence en 7 días), y la lista de **débitos de cheques sin registrar**, con un botón para registrarlos.
+4. **Movimientos.** Tabla con filtros y edición. Desde acá se carga a mano el **efectivo** y las transferencias entre cuentas.
+5. **Resumen.** Muestra para el mes elegido:
    - ingresos, egresos, resultado y gastos personales, con un switch **Todo / Empresa / Personal**,
    - el saldo de cada cuenta según el sistema, comparado con el último saldo informado por el banco.
 
@@ -43,6 +49,9 @@ separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las
 |---|---|
 | `supabase/migrations/019_tesoreria.sql` | Tablas, RLS, seeds de cuentas, categorías y 21 reglas sacadas de los extractos de octubre 2026 |
 | `supabase/migrations/020_tesoreria_mercadopago_rules.sql` | Reglas para Mercado Pago (se puede correr más de una vez) |
+| `supabase/migrations/021_tesoreria_cheques.sql` | Registro de cheques emitidos |
+| `lib/tesoreria/cheques.ts` | Detección de débitos/rechazos de cheques, matching, estado y cheques por debitar |
+| `lib/tesoreria/server/cheques-sync.ts` | Vincula cheques con débitos; se llama al guardar, importar, borrar y restaurar |
 | `lib/tesoreria/mercadopago.ts` | Texto del PDF de Mercado Pago → celdas |
 | `lib/tesoreria/parsers.ts` | Detección del banco y parsers de Macro y Nación (celdas → `StatementRow`) |
 | `lib/tesoreria/engine.ts` | Deduplicación, control de saldos, clasificación, sugerencia de patrones, pares internos |
@@ -72,7 +81,7 @@ Además, cruza los movimientos con el saldo inicial y final que trae el propio P
 ## Pendiente (próximas iteraciones)
 
 - **Contrapartes por nombre en Mercado Pago:** el PDF no trae CUIT, así que hoy se aprende con reglas por texto.
-- **Registro de cheques emitidos:** número de cheque → beneficiario. En el extracto, los cheques llegan como "CHEQUE P/CAMARA" y el número viene en la referencia.
+- **Cheques de terceros recibidos y descontados** (hoy sólo se registran los emitidos).
 - **Cierre mensual:** comparar el saldo real con el del sistema y bloquear el mes.
 - **Arqueo de efectivo.**
 - **Agrupar comisión + IVA:** comparten el número de transacción en Macro.

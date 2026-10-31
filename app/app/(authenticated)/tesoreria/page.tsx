@@ -1,4 +1,5 @@
-import { getAccounts, getCategories, getTransactions } from '@/lib/tesoreria/server/data'
+import { getAccounts, getCategories, getCheques, getTransactions } from '@/lib/tesoreria/server/data'
+import { chequeOutlook } from '@/lib/tesoreria/cheques'
 import { accountBalances, monthKey, summarize, type ScopeFilter } from '@/lib/tesoreria/summary'
 import { ResumenView } from '@/components/tesoreria/resumen-view'
 
@@ -12,10 +13,11 @@ function shiftMonth(key: string, delta: number): string {
 
 export default async function TesoreriaResumenPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams
-  const [accounts, categories, all] = await Promise.all([
+  const [accounts, categories, all, cheques] = await Promise.all([
     getAccounts(),
     getCategories(),
     getTransactions(),
+    getCheques(),
   ])
 
   const months = [...new Set(all.map((t) => monthKey(t.txDate)))].sort()
@@ -42,6 +44,7 @@ export default async function TesoreriaResumenPage({ searchParams }: { searchPar
       chart={summarize(inChart, categories, scope).byMonth}
       balances={accountBalances(accounts, all)}
       hasData={all.length > 0}
+      cheques={chequeOutlook(cheques, new Date().toISOString().slice(0, 10))}
     />
   )
 }

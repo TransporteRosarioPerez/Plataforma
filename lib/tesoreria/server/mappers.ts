@@ -1,5 +1,6 @@
 import type {
   TreasuryAccount,
+  TreasuryCheque,
   TreasuryCategory,
   TreasuryCounterparty,
   TreasuryImportBatch,
@@ -118,3 +119,23 @@ export function mapBatch(r: Row): TreasuryImportBatch {
   }
 }
 
+
+export const CHEQUE_COLUMNS =
+  'id, account_id, cheque_number, amount, issue_date, payment_date, payee_name, payee_cuit, category_id, scope, notes, status, transaction_id'
+export function mapCheque(r: Row): TreasuryCheque {
+  return {
+    id: r.id,
+    accountId: r.account_id,
+    chequeNumber: r.cheque_number,
+    amount: num(r.amount),
+    issueDate: r.issue_date ?? null,
+    paymentDate: r.payment_date ?? null,
+    payeeName: r.payee_name,
+    payeeCuit: r.payee_cuit ?? null,
+    categoryId: r.category_id ?? null,
+    scope: r.scope ?? null,
+    notes: r.notes ?? null,
+    status: r.status,
+    transactionId: r.transaction_id ?? null,
+  }
+}
