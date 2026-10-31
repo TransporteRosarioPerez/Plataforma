@@ -66,6 +66,20 @@ export const AUDIT_ACTIONS = {
   expenseCategoryDelete: 'expense_category.delete',
   userRoleUpdate: 'user.role_update',
   restoreRecord: 'restore.record',
+
+  treasuryImportConfirm: 'treasury.import.confirm',
+  treasuryImportDelete: 'treasury.import.delete',
+  treasuryTransactionCreate: 'treasury.transaction.create',
+  treasuryTransactionClassify: 'treasury.transaction.classify',
+  treasuryTransactionDelete: 'treasury.transaction.delete',
+  treasuryInternalPair: 'treasury.transaction.internal_pair',
+  treasuryRulesReapply: 'treasury.rules.reapply',
+  treasuryRuleUpsert: 'treasury.rule.upsert',
+  treasuryRuleToggle: 'treasury.rule.toggle',
+  treasuryCategoryUpsert: 'treasury.category.upsert',
+  treasuryCounterpartyUpsert: 'treasury.counterparty.upsert',
+  treasuryConfigDelete: 'treasury.config.delete',
+  treasuryAccountUpdate: 'treasury.account.update',
 } as const
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS]
@@ -138,6 +152,20 @@ export const auditActionLabels: Record<AuditAction, string> = {
   [AUDIT_ACTIONS.expenseCategoryDelete]: 'Categoría eliminada',
   [AUDIT_ACTIONS.userRoleUpdate]: 'Rol de usuario',
   [AUDIT_ACTIONS.restoreRecord]: 'Restauración desde papelera',
+
+  [AUDIT_ACTIONS.treasuryImportConfirm]: 'Tesorería: extracto importado',
+  [AUDIT_ACTIONS.treasuryImportDelete]: 'Tesorería: importación eliminada',
+  [AUDIT_ACTIONS.treasuryTransactionCreate]: 'Tesorería: movimiento cargado',
+  [AUDIT_ACTIONS.treasuryTransactionClassify]: 'Tesorería: movimiento clasificado',
+  [AUDIT_ACTIONS.treasuryTransactionDelete]: 'Tesorería: movimiento eliminado',
+  [AUDIT_ACTIONS.treasuryInternalPair]: 'Tesorería: transferencia interna',
+  [AUDIT_ACTIONS.treasuryRulesReapply]: 'Tesorería: reglas re-aplicadas',
+  [AUDIT_ACTIONS.treasuryRuleUpsert]: 'Tesorería: regla',
+  [AUDIT_ACTIONS.treasuryRuleToggle]: 'Tesorería: regla activada/desactivada',
+  [AUDIT_ACTIONS.treasuryCategoryUpsert]: 'Tesorería: categoría',
+  [AUDIT_ACTIONS.treasuryCounterpartyUpsert]: 'Tesorería: contraparte',
+  [AUDIT_ACTIONS.treasuryConfigDelete]: 'Tesorería: configuración eliminada',
+  [AUDIT_ACTIONS.treasuryAccountUpdate]: 'Tesorería: cuenta',
 }
 
 export const auditActionOptions = Object.entries(auditActionLabels).map(([value, label]) => ({
@@ -160,6 +188,9 @@ export function getEntityHref(entityType: string | null, entityId: string | null
       return `/app/choferes/${entityId}`
     case 'inventory_item':
       return `/app/inventario/${entityId}`
+    case 'treasury_transaction':
+    case 'treasury_import_batch':
+      return '/app/tesoreria/movimientos'
   }
   return null
 }

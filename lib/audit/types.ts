@@ -20,6 +20,12 @@ export type AuditEntityType =
   | 'trip_document'
   | 'trip_expense'
   | 'session'
+  | 'treasury_transaction'
+  | 'treasury_import_batch'
+  | 'treasury_rule'
+  | 'treasury_category'
+  | 'treasury_counterparty'
+  | 'treasury_account'
 
 export type AuditLog = {
   id: string

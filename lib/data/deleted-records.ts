@@ -24,6 +24,11 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
     itemsRes,
     movementsRes,
     invoicesRes,
+    treasuryTxRes,
+    treasuryBatchesRes,
+    treasuryRulesRes,
+    treasuryCategoriesRes,
+    treasuryCounterpartiesRes,
   ] = await Promise.all([
     supabase
       .from('clients')
@@ -93,6 +98,34 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
     supabase
       .from('invoices')
       .select('id, invoice_number, deleted_at')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false }),
+    // Tesorería (las tablas devuelven vacío por RLS si el usuario no es superadmin)
+    supabase
+      .from('treasury_transactions')
+      .select('id, tx_date, description_raw, amount, import_batch_id, source, deleted_at')
+      .not('deleted_at', 'is', null)
+      .neq('source', 'transfer_mirror')
+      .order('deleted_at', { ascending: false })
+      .limit(500),
+    supabase
+      .from('treasury_import_batches')
+      .select('id, file_name, row_count, deleted_at')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false }),
+    supabase
+      .from('treasury_rules')
+      .select('id, name, deleted_at')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false }),
+    supabase
+      .from('treasury_categories')
+      .select('id, name, deleted_at')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false }),
+    supabase
+      .from('treasury_counterparties')
+      .select('id, name, cuit, deleted_at')
       .not('deleted_at', 'is', null)
       .order('deleted_at', { ascending: false }),
   ])
@@ -232,6 +265,47 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
       id: row.id,
       entity: 'invoice',
       label: row.invoice_number,
+      deletedAt: new Date(row.deleted_at as string),
+    })
+  }
+
+  const deletedBatchIds = new Set((treasuryBatchesRes.data ?? []).map((b) => b.id as string))
+  const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' })
+
+  for (const row of treasuryBatchesRes.data ?? []) {
+    rows.push({
+      id: row.id,
+      entity: 'treasury_import_batch',
+      label: `${row.file_name} (${row.row_count} movimientos)`,
+      deletedAt: new Date(row.deleted_at as string),
+    })
+  }
+
+  for (const row of treasuryTxRes.data ?? []) {
+    // Los movimientos de una importación borrada se recuperan junto con la importación.
+    if (row.import_batch_id && deletedBatchIds.has(row.import_batch_id as string)) continue
+    const [y, m, d] = String(row.tx_date).split('-')
+    rows.push({
+      id: row.id,
+      entity: 'treasury_transaction',
+      label: `${d}/${m}/${y} · ${row.description_raw} · ${money.format(Number(row.amount))}`,
+      deletedAt: new Date(row.deleted_at as string),
+    })
+  }
+
+  for (const row of treasuryRulesRes.data ?? []) {
+    rows.push({ id: row.id, entity: 'treasury_rule', label: row.name, deletedAt: new Date(row.deleted_at as string) })
+  }
+
+  for (const row of treasuryCategoriesRes.data ?? []) {
+    rows.push({ id: row.id, entity: 'treasury_category', label: row.name, deletedAt: new Date(row.deleted_at as string) })
+  }
+
+  for (const row of treasuryCounterpartiesRes.data ?? []) {
+    rows.push({
+      id: row.id,
+      entity: 'treasury_counterparty',
+      label: `${row.name} (${row.cuit})`,
       deletedAt: new Date(row.deleted_at as string),
     })
   }

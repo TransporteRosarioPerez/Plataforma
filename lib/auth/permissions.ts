@@ -11,6 +11,7 @@ export function canAccessReports(role: UserRole): boolean {
 export const SUPERADMIN_ONLY_ROUTES = [
   '/app/facturas',
   '/app/reportes',
+  '/app/tesoreria',
   '/app/papelera',
   '/app/equipo',
   '/app/configuracion',

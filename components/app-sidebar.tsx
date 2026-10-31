@@ -20,6 +20,7 @@ import {
   Fuel,
   MapPin,
   ScrollText,
+  Landmark,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -79,6 +80,12 @@ const mainNavItems: NavItem[] = [
     title: 'Facturas',
     href: '/app/facturas',
     icon: Receipt,
+    roles: ['superadmin'] as const,
+  },
+  {
+    title: 'Tesorería',
+    href: '/app/tesoreria',
+    icon: Landmark,
     roles: ['superadmin'] as const,
   },
   {

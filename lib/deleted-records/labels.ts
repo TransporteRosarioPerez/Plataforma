@@ -15,6 +15,11 @@ const ENTITY_LABELS: Record<RestorableEntity, string> = {
   inventory_item: 'Ítem de inventario',
   inventory_movement: 'Movimiento de inventario',
   invoice: 'Factura',
+  treasury_transaction: 'Tesorería · Movimiento',
+  treasury_import_batch: 'Tesorería · Importación',
+  treasury_rule: 'Tesorería · Regla',
+  treasury_category: 'Tesorería · Categoría',
+  treasury_counterparty: 'Tesorería · Contraparte',
 }
 
 export function getEntityTypeLabel(entity: RestorableEntity): string {

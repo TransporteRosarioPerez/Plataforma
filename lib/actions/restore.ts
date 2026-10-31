@@ -13,6 +13,10 @@ import {
   loadProformaLineAmounts,
 } from '@/lib/proformas/trip-billing-sync'
 import { recalculateTripTotals } from '@/lib/trip-totals'
+import {
+  restoreTreasuryImportBatch,
+  restoreTreasuryTransaction,
+} from '@/lib/tesoreria/server/restore'
 
 export type RestorableEntity =
   | 'client'
@@ -29,6 +33,11 @@ export type RestorableEntity =
   | 'inventory_item'
   | 'inventory_movement'
   | 'invoice'
+  | 'treasury_transaction'
+  | 'treasury_import_batch'
+  | 'treasury_rule'
+  | 'treasury_category'
+  | 'treasury_counterparty'
 
 const TABLE_BY_ENTITY: Record<RestorableEntity, string> = {
   client: 'clients',
@@ -45,6 +54,11 @@ const TABLE_BY_ENTITY: Record<RestorableEntity, string> = {
   inventory_item: 'inventory_items',
   inventory_movement: 'inventory_movements',
   invoice: 'invoices',
+  treasury_transaction: 'treasury_transactions',
+  treasury_import_batch: 'treasury_import_batches',
+  treasury_rule: 'treasury_rules',
+  treasury_category: 'treasury_categories',
+  treasury_counterparty: 'treasury_counterparties',
 }
 
 function revalidateForEntity(entity: RestorableEntity, extra?: { tripId?: string; entityType?: string; entityId?: string; itemId?: string }) {
@@ -103,6 +117,13 @@ function revalidateForEntity(entity: RestorableEntity, extra?: { tripId?: string
       revalidatePath('/app/facturas')
       revalidatePath('/app/proformas')
       revalidatePath('/app/viajes')
+      break
+    case 'treasury_transaction':
+    case 'treasury_import_batch':
+    case 'treasury_rule':
+    case 'treasury_category':
+    case 'treasury_counterparty':
+      revalidatePath('/app/tesoreria', 'layout')
       break
   }
 }
@@ -311,6 +332,19 @@ export async function restoreRecord(
 
   if (entity === 'invoice') {
     return restoreInvoiceRecord(id)
+  }
+
+  // Tesorería: el movimiento vuelve con su espejo; la importación, con sus movimientos.
+  if (entity === 'treasury_transaction' || entity === 'treasury_import_batch') {
+    const result =
+      entity === 'treasury_transaction'
+        ? await restoreTreasuryTransaction(id)
+        : await restoreTreasuryImportBatch(id)
+    if (result.success) {
+      revalidateForEntity(entity)
+      await logRestoreAudit(entity, id)
+    }
+    return result
   }
 
   const supabase = await createClient()
