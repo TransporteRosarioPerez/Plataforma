@@ -18,7 +18,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { classifyTransaction, type ClassifyInput } from '@/lib/tesoreria/server/actions-transactions'
 import { suggestPattern } from '@/lib/tesoreria/engine'
 import { isChequeDebit } from '@/lib/tesoreria/cheques'
-import Link from 'next/link'
 import type { TreasuryCategory, TreasuryScope, TreasuryTransaction } from '@/lib/tesoreria/types'
 import { categoriesForAmount, formatDate, formatMoney, kindLabels } from './format'
 
@@ -46,6 +45,8 @@ export function ClassifyDialog({ tx, accountName, categories, onOpenChange }: Pr
   const [pattern, setPattern] = useState('')
   const [onlyThisAccount, setOnlyThisAccount] = useState(false)
   const [counterpartyName, setCounterpartyName] = useState('')
+  const [payeeName, setPayeeName] = useState('')
+  const [payeeCuit, setPayeeCuit] = useState('')
 
   useEffect(() => {
     if (!tx) return
@@ -56,6 +57,8 @@ export function ClassifyDialog({ tx, accountName, categories, onOpenChange }: Pr
     setPattern(suggestPattern(tx.descriptionNorm))
     setOnlyThisAccount(false)
     setCounterpartyName('')
+    setPayeeName('')
+    setPayeeCuit('')
   }, [tx])
 
   const options = useMemo(() => (tx ? categoriesForAmount(categories, tx.amount) : []), [tx, categories])
@@ -70,10 +73,14 @@ export function ClassifyDialog({ tx, accountName, categories, onOpenChange }: Pr
     else if (cat?.defaultScope) setScope(cat.defaultScope)
   }
 
+  const isCheque = !!tx && isChequeDebit(tx.descriptionNorm, tx.amount) && !!tx.reference
+
   const submit = () => {
     if (!tx) return
     if (!categoryId) return toast.error('Elegí una categoría')
     if (!isInternal && !scope) return toast.error('Elegí si es de la empresa o personal')
+    // Al clasificarlo por primera vez el beneficiario es obligatorio; después, sólo si se quiere cambiar.
+    if (isCheque && tx.classification === 'pending' && !payeeName.trim()) return toast.error('¿A quién se le dio el cheque?')
 
     let learnPayload: ClassifyInput['learn']
     if (learn === 'rule') {
@@ -96,7 +103,8 @@ export function ClassifyDialog({ tx, accountName, categories, onOpenChange }: Pr
         categoryId,
         scope: isInternal ? null : (scope as TreasuryScope),
         notes,
-        learn: learnPayload,
+        learn: isCheque ? undefined : learnPayload,
+        cheque: isCheque && payeeName.trim() ? { payeeName: payeeName.trim(), payeeCuit: payeeCuit || null } : undefined,
       })
       if (result.error) toast.error(result.error)
       else {
@@ -127,12 +135,25 @@ export function ClassifyDialog({ tx, accountName, categories, onOpenChange }: Pr
             </DialogHeader>
 
             <div className="space-y-4">
-              {isChequeDebit(tx.descriptionNorm, tx.amount) && (
-                <p className="rounded-md border border-blue-200 bg-blue-50/60 px-3 py-2 text-sm dark:border-blue-900 dark:bg-blue-950/40">
-                  Es un cheque{tx.reference ? ` (N° ${tx.reference})` : ''}. Lo mejor es{' '}
-                  <Link href="/app/tesoreria/cheques" className="font-medium underline">registrarlo en Cheques</Link>{' '}
-                  con a quién fue: así queda el beneficiario y se clasifica solo.
-                </p>
+              {isCheque && (
+                <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50/60 p-3 dark:border-blue-900 dark:bg-blue-950/40">
+                  <p className="text-sm">
+                    Es el cheque <strong>N° {tx.reference}</strong>.{' '}
+                    {tx.classification === 'pending'
+                      ? 'El banco no dice a quién se pagó: completalo y queda registrado en Cheques.'
+                      : 'Completá el beneficiario sólo si querés cambiarlo.'}
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2 space-y-1">
+                      <Label htmlFor="payee">¿A quién fue?</Label>
+                      <Input id="payee" value={payeeName} onChange={(e) => setPayeeName(e.target.value)} placeholder="Ej.: Gomería Ruta 9" autoFocus />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="payee-cuit">CUIT (opcional)</Label>
+                      <Input id="payee-cuit" value={payeeCuit} onChange={(e) => setPayeeCuit(e.target.value.replace(/\D/g, ''))} inputMode="numeric" />
+                    </div>
+                  </div>
+                </div>
               )}
               <div className="space-y-2">
                 <Label>Categoría</Label>
@@ -175,6 +196,7 @@ export function ClassifyDialog({ tx, accountName, categories, onOpenChange }: Pr
                 <Textarea id="tx-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ej.: arreglo de la heladera" />
               </div>
 
+              {!isCheque && (
               <div className="space-y-3 rounded-lg border p-3">
                 <Label>¿Que el sistema lo aprenda?</Label>
                 <RadioGroup value={learn} onValueChange={(v) => setLearn(v as LearnMode)} className="space-y-2">
@@ -211,6 +233,7 @@ export function ClassifyDialog({ tx, accountName, categories, onOpenChange }: Pr
                   </div>
                 )}
               </div>
+              )}
             </div>
 
             <DialogFooter>

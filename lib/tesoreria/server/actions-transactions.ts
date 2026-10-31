@@ -10,11 +10,12 @@ import { AUDIT_ACTIONS } from '@/lib/audit/actions'
 import { logAudit } from '@/lib/audit/log'
 import { revalidateTreasury } from './revalidate'
 import { linkedTransactionIds } from './restore'
-import { syncChequesForTransactions } from './cheques-sync'
+import { syncCheque, syncChequesForTransactions } from './cheques-sync'
+import { isChequeDebit, normalizeChequeNumber } from '../cheques'
 import { assertMonthsOpen } from './month-guard'
 import { getCategories, getCounterparties, getRules, getTransactions } from './data'
 import { classify, isValidRulePattern, manualClassification } from '../engine'
-import { normalizeDescription, roundMoney } from '../text'
+import { isValidCuit, normalizeDescription, roundMoney } from '../text'
 
 const uuid = z.string().uuid()
 const scopeSchema = z.enum(['empresa', 'personal']).nullable()
@@ -108,6 +109,13 @@ const classifySchema = z.object({
       }),
     ])
     .optional(),
+  /** Débito de cheque: a quién fue. Registra (o completa) el cheque en el registro. */
+  cheque: z
+    .object({
+      payeeName: z.string().min(1, '¿A quién fue el cheque?').max(120),
+      payeeCuit: z.string().max(11).nullable().optional(),
+    })
+    .optional(),
 })
 
 export type ClassifyInput = z.infer<typeof classifySchema>
@@ -117,12 +125,12 @@ export async function classifyTransaction(input: ClassifyInput): Promise<ActionS
     await requireSuperadmin()
     const parsed = classifySchema.safeParse(input)
     if (!parsed.success) return { error: parsed.error.errors[0]?.message ?? 'Datos inválidos' }
-    const { id, categoryId, scope, notes, learn } = parsed.data
+    const { id, categoryId, scope, notes, learn, cheque } = parsed.data
 
     const supabase = await createClient()
     const { data: tx, error: txError } = await supabase
       .from('treasury_transactions')
-      .select('id, account_id, description_raw, counterparty_cuit, amount, source')
+      .select('id, account_id, description_raw, description_norm, reference, tx_date, counterparty_cuit, amount, source')
       .eq('id', id)
       .is('deleted_at', null)
       .single()
@@ -148,6 +156,58 @@ export async function classifyTransaction(input: ClassifyInput): Promise<ActionS
       })
       .eq('id', id)
     if (error) return { error: error.message }
+
+    // Débito de cheque: el beneficiario se completa acá y el cheque queda registrado y vinculado.
+    let chequeNote = ''
+    if (cheque && isChequeDebit(tx.description_norm as string, Number(tx.amount))) {
+      const number = normalizeChequeNumber(tx.reference as string)
+      if (!number) return { error: 'El extracto no trae el número de este cheque: registralo desde Cheques' }
+      const cuit = cheque.payeeCuit?.replace(/\D/g, '') || null
+      if (cuit && !isValidCuit(cuit)) return { error: 'El CUIT del beneficiario no es válido' }
+      const { data: existing } = await supabase
+        .from('treasury_cheques')
+        .select('id')
+        .eq('account_id', tx.account_id)
+        .eq('cheque_number', number)
+        .is('deleted_at', null)
+        .maybeSingle()
+      const payload = {
+        payee_name: cheque.payeeName.trim(),
+        payee_cuit: cuit,
+        category_id: categoryId,
+        scope: result.scope,
+        ...(notes ? { notes } : {}),
+      }
+      const write = existing
+        ? await supabase.from('treasury_cheques').update(payload).eq('id', existing.id).select('id').single()
+        : await supabase
+            .from('treasury_cheques')
+            .insert({
+              ...payload,
+              account_id: tx.account_id,
+              cheque_number: number,
+              amount: Math.abs(Number(tx.amount)),
+              payment_date: tx.tx_date,
+              status: 'debitado',
+              transaction_id: id,
+            })
+            .select('id')
+            .single()
+      if (write.error) return { error: `Se clasificó, pero no se pudo registrar el cheque: ${write.error.message}` }
+      await supabase
+        .from('treasury_transactions')
+        .update({ notes: `Cheque N° ${number} · ${payload.payee_name}${notes ? ` · ${notes}` : ''}` })
+        .eq('id', id)
+      if (existing) await syncCheque(existing.id as string)
+      await logAudit({
+        action: AUDIT_ACTIONS.treasuryChequeUpsert,
+        entityType: 'treasury_cheque',
+        entityId: write.data.id,
+        entityLabel: `Cheque N° ${number}`,
+        summary: `Registró desde Pendientes el cheque N° ${number} a ${payload.payee_name}`,
+      })
+      chequeNote = ` · cheque N° ${number} registrado a ${payload.payee_name}`
+    }
 
     let learned = ''
     if (learn && categoryId) {
@@ -210,7 +270,7 @@ export async function classifyTransaction(input: ClassifyInput): Promise<ActionS
       metadata: { amount: Number(tx.amount) },
     })
     revalidateTreasury()
-    return { success: `Movimiento clasificado${learned}` }
+    return { success: `Movimiento clasificado${chequeNote}${learned}` }
   } catch (e) {
     return fail(e, 'Error al clasificar')
   }
