@@ -17,6 +17,8 @@ import {
   getRules,
 } from './data'
 import { parseStatement, providerLabel } from '../parsers'
+import { isMercadoPagoText, parseMercadoPagoText } from '../mercadopago'
+import { extractPdfText } from './pdf'
 import { buildDedupKeys, classify, countBalanceBreaks } from '../engine'
 import { extractCuit, normalizeDescription } from '../text'
 import type { ImportPreview, ImportPreviewRow, SheetCell } from '../types'
@@ -25,13 +27,52 @@ const cellsSchema = z
   .array(z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])).max(60))
   .max(20000)
 
-async function buildPreview(fileName: string, rawCells: unknown): Promise<ImportPreview> {
-  const parsedCells = cellsSchema.safeParse(rawCells)
-  if (!parsedCells.success) throw new Error('El archivo no tiene un formato de planilla válido')
-  const cells = parsedCells.data as SheetCell[][]
+/** Lo que manda el navegador: las celdas de una planilla (.xls/.xlsx/.csv) o un PDF en base64. */
+export type StatementUpload =
+  | { kind: 'cells'; cells: unknown }
+  | { kind: 'pdf'; base64: string }
+
+const uploadSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('cells'), cells: cellsSchema }),
+  z.object({ kind: z.literal('pdf'), base64: z.string().min(10).max(8_000_000) }),
+])
+
+async function uploadToCells(upload: unknown): Promise<{ cells: SheetCell[][]; warnings: string[] }> {
+  const parsed = uploadSchema.safeParse(upload)
+  if (!parsed.success) throw new Error('El archivo no tiene un formato válido')
+  if (parsed.data.kind === 'cells') return { cells: parsed.data.cells as SheetCell[][], warnings: [] }
+
+  const text = await extractPdfText(parsed.data.base64)
+  if (!isMercadoPagoText(text)) {
+    throw new Error('Este PDF no parece un resumen de cuenta de Mercado Pago. Macro y Nación se importan en Excel.')
+  }
+  const mp = parseMercadoPagoText(text)
+  return { cells: mp.cells, warnings: mercadoPagoWarnings(mp) }
+}
+
+/** Cruza los movimientos leídos con el saldo inicial/final que informa el propio PDF. */
+function mercadoPagoWarnings(mp: ReturnType<typeof parseMercadoPagoText>): string[] {
+  const rows = parseStatement(mp.cells).rows
+  if (rows.length === 0) return []
+  const ordered = [...rows].sort((a, b) => a.statementOrder - b.statementOrder)
+  const first = ordered[0]
+  const last = ordered[ordered.length - 1]
+  const warnings: string[] = []
+  if (mp.openingBalance !== null && first.bankBalance !== null && Math.abs(mp.openingBalance + first.amount - first.bankBalance) > 0.01) {
+    warnings.push('El saldo inicial del PDF no coincide con el primer movimiento leído: puede faltar un movimiento al principio')
+  }
+  if (mp.closingBalance !== null && last.bankBalance !== null && Math.abs(mp.closingBalance - last.bankBalance) > 0.01) {
+    warnings.push('El saldo final del PDF no coincide con el último movimiento leído: puede faltar un movimiento al final')
+  }
+  return warnings
+}
+
+async function buildPreview(fileName: string, upload: unknown): Promise<ImportPreview> {
+  const { cells, warnings } = await uploadToCells(upload)
 
   const statement = parseStatement(cells)
   if (statement.rows.length === 0) throw new Error('El extracto no tiene movimientos')
+  statement.errors.unshift(...warnings)
 
   const accounts = await getAccounts(false)
   const account = accounts.find((a) => a.provider === statement.provider)
@@ -92,11 +133,11 @@ async function buildPreview(fileName: string, rawCells: unknown): Promise<Import
 /** Paso 1: leer, detectar banco, deduplicar y clasificar. No escribe nada. */
 export async function previewTreasuryImport(
   fileName: string,
-  cells: unknown
+  upload: StatementUpload
 ): Promise<{ preview?: ImportPreview; error?: string }> {
   try {
     await requireSuperadmin()
-    return { preview: await buildPreview(fileName, cells) }
+    return { preview: await buildPreview(fileName, upload) }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Error al leer el extracto' }
   }
@@ -105,11 +146,11 @@ export async function previewTreasuryImport(
 /** Paso 2: vuelve a calcular la vista previa en el servidor y guarda sólo los nuevos. */
 export async function confirmTreasuryImport(
   fileName: string,
-  cells: unknown
+  upload: StatementUpload
 ): Promise<ActionState & { imported?: number }> {
   try {
     const session = await requireSuperadmin()
-    const preview = await buildPreview(fileName, cells)
+    const preview = await buildPreview(fileName, upload)
     const fresh = preview.rows.filter((r) => !r.isDuplicate)
     if (fresh.length === 0) return { error: 'No hay movimientos nuevos: todo el extracto ya estaba cargado' }
 

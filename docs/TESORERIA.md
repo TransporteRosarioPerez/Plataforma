@@ -6,8 +6,9 @@ separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las
 
 ## Cómo se usa (flujo semanal)
 
-1. **Importar.** Se descarga el extracto del home banking y se sube el `.xls` tal cual.
-   - El banco se detecta por los encabezados del archivo.
+1. **Importar.** Macro y Nación: se descarga el extracto del home banking y se sube el `.xls` tal cual.
+   Mercado Pago: se sube el PDF del **Resumen de cuenta**, que es el único formato que ofrece.
+   - El banco se detecta por los encabezados del archivo (o por el texto del PDF).
    - Antes de guardar hay una vista previa que muestra:
      - cuántos movimientos son nuevos y cuántos ya estaban cargados,
      - cuántos se clasifican solos y cuántos quedan pendientes,
@@ -41,6 +42,8 @@ separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las
 | Ruta | Qué hay |
 |---|---|
 | `supabase/migrations/019_tesoreria.sql` | Tablas, RLS, seeds de cuentas, categorías y 21 reglas sacadas de los extractos de octubre 2026 |
+| `supabase/migrations/020_tesoreria_mercadopago_rules.sql` | Reglas para Mercado Pago (se puede correr más de una vez) |
+| `lib/tesoreria/mercadopago.ts` | Texto del PDF de Mercado Pago → celdas |
 | `lib/tesoreria/parsers.ts` | Detección del banco y parsers de Macro y Nación (celdas → `StatementRow`) |
 | `lib/tesoreria/engine.ts` | Deduplicación, control de saldos, clasificación, sugerencia de patrones, pares internos |
 | `lib/tesoreria/summary.ts` | Totales del resumen y saldos por cuenta |
@@ -53,6 +56,12 @@ separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las
 El `.xls` se lee **en el navegador** con SheetJS. El servidor recibe sólo las celdas y vuelve a
 validar y clasificar todo antes de guardar.
 
+El PDF de Mercado Pago se manda en base64 y se lee **en el servidor** con `unpdf`
+(`lib/tesoreria/server/pdf.ts`). `lib/tesoreria/mercadopago.ts` convierte el texto en las mismas celdas que
+daría una planilla, así que el resto del flujo (deduplicación por ID de operación, reglas, saldos) es el mismo.
+Además, cruza los movimientos con el saldo inicial y final que trae el propio PDF. Límite: 700 KB por PDF
+(un mes ocupa unos 65 KB).
+
 ## Puesta en marcha
 
 1. `pnpm install`. Agrega SheetJS desde su CDN oficial; la versión de npm está desactualizada y tiene vulnerabilidades. **Hay que commitear el `pnpm-lock.yaml`**, porque Vercel instala con lockfile congelado.
@@ -62,7 +71,7 @@ validar y clasificar todo antes de guardar.
 
 ## Pendiente (próximas iteraciones)
 
-- **Parser de Mercado Pago:** falta un extracto de ejemplo. Hay que agregar un `ProviderSpec` en `parsers.ts`.
+- **Contrapartes por nombre en Mercado Pago:** el PDF no trae CUIT, así que hoy se aprende con reglas por texto.
 - **Registro de cheques emitidos:** número de cheque → beneficiario. En el extracto, los cheques llegan como "CHEQUE P/CAMARA" y el número viene en la referencia.
 - **Cierre mensual:** comparar el saldo real con el del sistema y bloquear el mes.
 - **Arqueo de efectivo.**

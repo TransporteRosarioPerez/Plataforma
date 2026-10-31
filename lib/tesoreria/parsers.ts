@@ -55,6 +55,20 @@ const PROVIDERS: ProviderSpec[] = [
     },
     balanceMode: 'before',
   },
+  {
+    // Mercado Pago sólo exporta PDF: lib/tesoreria/mercadopago.ts lo convierte a estas celdas.
+    provider: 'mercadopago',
+    label: 'Mercado Pago',
+    signature: ['fecha', 'descripcion', 'id de la operacion', 'valor', 'saldo'],
+    columns: {
+      date: ['fecha'],
+      reference: ['id de la operacion'],
+      description: ['descripcion'],
+      amount: ['valor'],
+      balance: ['saldo'],
+    },
+    balanceMode: 'after',
+  },
 ]
 
 const HEADER_SCAN_ROWS = 20
@@ -97,8 +111,8 @@ export function parseStatement(cells: SheetCell[][]): StatementParseResult {
   const found = findHeader(cells)
   if (!found) {
     throw new Error(
-      'Formato no reconocido. Por ahora se aceptan extractos de Banco Macro y Banco Nación ' +
-        '(Mercado Pago se agrega cuando tengamos un extracto de ejemplo).'
+      'Formato no reconocido. Se aceptan extractos de Banco Macro y Banco Nación (.xls) ' +
+        'y el resumen de cuenta de Mercado Pago (.pdf).'
     )
   }
 
@@ -169,6 +183,5 @@ export function parseStatement(cells: SheetCell[][]): StatementParseResult {
 }
 
 export function providerLabel(provider: TreasuryProvider): string {
-  if (provider === 'mercadopago') return 'Mercado Pago'
   return PROVIDERS.find((p) => p.provider === provider)?.label ?? provider
 }

@@ -16,6 +16,7 @@ import {
   confirmTreasuryImport,
   deleteImportBatch,
   previewTreasuryImport,
+  type StatementUpload,
 } from '@/lib/tesoreria/server/actions-import'
 import type {
   ImportPreview,
@@ -26,7 +27,29 @@ import type {
 } from '@/lib/tesoreria/types'
 import { amountClass, formatDate, formatDateTime, formatMoney, scopeLabels } from './format'
 
-const ACCEPT = '.xls,.xlsx,.csv'
+const ACCEPT = '.xls,.xlsx,.csv,.pdf'
+// Límite de las server actions de Next (1 MB) con margen por el base64.
+const MAX_PDF_BYTES = 700 * 1024
+
+async function fileToBase64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  }
+  return btoa(binary)
+}
+
+/** Planillas: se leen en el navegador. PDF (Mercado Pago): se manda tal cual y lo lee el servidor. */
+async function fileToUpload(file: File): Promise<StatementUpload> {
+  if (file.name.toLowerCase().endsWith('.pdf')) {
+    if (file.size > MAX_PDF_BYTES) {
+      throw new Error('El PDF es muy grande: descargá el resumen de a un mes')
+    }
+    return { kind: 'pdf', base64: await fileToBase64(file) }
+  }
+  return { kind: 'cells', cells: await readCells(file) }
+}
 
 /** Lee la primera hoja del archivo en el navegador y devuelve las celdas crudas. */
 async function readCells(file: File): Promise<SheetCell[][]> {
@@ -51,7 +74,7 @@ export function ImportarView({ accounts, categories, batches }: Props) {
   const [loading, setLoading] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [preview, setPreview] = useState<ImportPreview | null>(null)
-  const [cells, setCells] = useState<SheetCell[][] | null>(null)
+  const [upload, setUpload] = useState<StatementUpload | null>(null)
   const [onlyPending, setOnlyPending] = useState(false)
 
   const accountName = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])
@@ -60,18 +83,18 @@ export function ImportarView({ accounts, categories, batches }: Props) {
   const handleFile = async (file: File) => {
     const lower = file.name.toLowerCase()
     if (!ACCEPT.split(',').some((ext) => lower.endsWith(ext))) {
-      toast.error('Subí un archivo .xls, .xlsx o .csv')
+      toast.error('Subí el Excel del banco (.xls, .xlsx, .csv) o el PDF de Mercado Pago')
       return
     }
     setLoading(true)
     try {
-      const read = await readCells(file)
+      const read = await fileToUpload(file)
       const result = await previewTreasuryImport(file.name, read)
       if (result.error || !result.preview) {
         toast.error(result.error ?? 'No se pudo leer el extracto')
         return
       }
-      setCells(read)
+      setUpload(read)
       setPreview(result.preview)
       setOnlyPending(false)
     } catch (e) {
@@ -82,15 +105,15 @@ export function ImportarView({ accounts, categories, batches }: Props) {
   }
 
   const confirm = async () => {
-    if (!preview || !cells) return
+    if (!preview || !upload) return
     setConfirming(true)
-    const result = await confirmTreasuryImport(preview.fileName, cells)
+    const result = await confirmTreasuryImport(preview.fileName, upload)
     setConfirming(false)
     if (result.error) toast.error(result.error)
     else {
       toast.success(result.success)
       setPreview(null)
-      setCells(null)
+      setUpload(null)
       router.refresh()
     }
   }
@@ -115,8 +138,8 @@ export function ImportarView({ accounts, categories, batches }: Props) {
         <CardHeader>
           <CardTitle>Importar extracto</CardTitle>
           <CardDescription>
-            Descargá los movimientos desde el home banking y subí el Excel tal cual. El banco se detecta solo
-            (Macro y Nación; Mercado Pago próximamente). Los movimientos ya cargados se saltean.
+            Macro y Nación: descargá los movimientos en Excel y subilo tal cual. Mercado Pago: subí el PDF del
+            resumen de cuenta. La cuenta se detecta sola y los movimientos ya cargados se saltean.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -241,7 +264,10 @@ export function ImportarView({ accounts, categories, batches }: Props) {
                 </div>
               )}
               {preview.errors.length > 0 && (
-                <p className="text-xs text-muted-foreground">{preview.errors.length} filas no se pudieron leer y se omiten.</p>
+                <ul className="space-y-0.5 text-xs text-muted-foreground">
+                  {preview.errors.slice(0, 5).map((e) => <li key={e}>• {e}</li>)}
+                  {preview.errors.length > 5 && <li>• y {preview.errors.length - 5} avisos más</li>}
+                </ul>
               )}
 
               <div className="flex items-center gap-2 text-sm">

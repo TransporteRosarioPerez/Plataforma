@@ -64,14 +64,15 @@ export function excelSerialToIso(serial: number): string {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
 }
 
-/** Fecha desde una celda: serial de Excel, "dd/mm/yyyy" o "yyyy-mm-dd". */
+/** Fecha desde una celda: serial de Excel, "dd/mm/yyyy", "dd-mm-yyyy" o "yyyy-mm-dd". */
 export function parseDateCell(value: SheetCell): string | null {
   if (typeof value === 'number' && value > 20000 && value < 80000) {
     return excelSerialToIso(value)
   }
   if (typeof value !== 'string') return null
   const s = value.trim()
-  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/)
+  // dd/mm/yyyy (Nación) o dd-mm-yyyy (Mercado Pago)
+  let m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?!\d)/)
   if (m) {
     const year = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])
     const month = Number(m[2])

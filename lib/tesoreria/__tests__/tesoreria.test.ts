@@ -271,3 +271,44 @@ test('saldos por cuenta: inicial + movimientos y último saldo del banco', () =>
   assert.equal(balances[0].systemBalance, 130)
   assert.equal(balances[0].lastBankBalance, 130)
 })
+
+// Mercado Pago: texto como lo devuelve el PDF (pie de la última página ANTES de los movimientos).
+const MP_TEXT = `1/2
+RESUMEN DE CUENTA EN PESOS
+Titular Ficticio
+CVU: 0000003100000000000000 20000000001CUIT/ CUIL:
+Del 1 al 30 de octubre de 2026Periodo:
+Saldo inicial: $ 1.000,00 Entradas: $ 5.000,00
+Salidas: $ -1.500,50 Saldo final: $ 4.499,50
+DETALLE DE MOVIMIENTOS
+Fecha Descripción ID de la
+operación Valor Saldo
+01-10-2026 Pago con QR YPF RUTA 14
+PLAYA 180827997659 $ -1.000,50 $ -0,50
+02-10-2026 Transferencia recibida Cliente 182037654034 $ 5.000,00 $ 4.999,50
+Fecha de generación: 31-10-2026
+Mercado Libre S.R.L. CUIT 30-70308853-4 Av. Caseros 3039, CABA. Encuentra nuestros canales
+de consulta en: www.mercadopago.com.ar
+2/2
+Fecha Descripción ID de la
+operación Valor Saldo
+30-10-2026 Débito por deuda Créditos de
+Mercado Pago 3666105988 $ -500,00 $ 4.499,50`
+
+test('Mercado Pago: PDF → celdas → movimientos', async () => {
+  const { parseMercadoPagoText, isMercadoPagoText } = await import('@/lib/tesoreria/mercadopago')
+  assert.ok(isMercadoPagoText(MP_TEXT))
+  const mp = parseMercadoPagoText(MP_TEXT)
+  assert.equal(mp.openingBalance, 1000)
+  assert.equal(mp.closingBalance, 4499.5)
+  assert.equal(mp.cuit, '20000000001')
+  const r = parseStatement(mp.cells)
+  assert.equal(r.provider, 'mercadopago')
+  assert.equal(r.rows.length, 3)
+  assert.equal(r.rows[0].description, 'Pago con QR YPF RUTA 14 PLAYA')
+  assert.equal(r.rows[0].txDate, '2026-10-01')
+  assert.equal(r.rows[0].reference, '180827997659')
+  assert.equal(r.rows[2].description, 'Débito por deuda Créditos de Mercado Pago')
+  assert.equal(r.rows[2].amount, -500)
+  assert.equal(countBalanceBreaks(r.rows), 0)
+})
