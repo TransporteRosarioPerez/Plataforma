@@ -15,8 +15,12 @@ import {
   getCounterparties,
   getExistingDedupKeys,
   getCheques,
+  getLastLoadedBalance,
   getRules,
 } from './data'
+import { assertMonthsOpen, getClosedMonths } from './month-guard'
+import { detectImportGap } from '../closing'
+import { formatMonthLabel } from '../closing-labels'
 import { parseStatement, providerLabel } from '../parsers'
 import { isMercadoPagoText, parseMercadoPagoText } from '../mercadopago'
 import { extractPdfText } from './pdf'
@@ -131,6 +135,16 @@ async function buildPreview(fileName: string, upload: unknown): Promise<ImportPr
 
   const fresh = rows.filter((r) => !r.isDuplicate)
   const dates = statement.rows.map((r) => r.txDate).sort()
+
+  // Hueco con lo ya cargado: el saldo con el que arranca el archivo tiene que encadenar.
+  const firstDate = dates[0]
+  const lastLoaded = firstDate ? await getLastLoadedBalance(account.id, firstDate) : null
+  const gap = detectImportGap(lastLoaded, statement.rows, rows.length - fresh.length)
+
+  // Movimientos nuevos que caerían en meses ya cerrados.
+  const closed = await getClosedMonths(account.id)
+  const closedMonths = [...new Set(fresh.map((r) => r.txDate.slice(0, 7)).filter((m) => closed.has(m)))].sort()
+
   return {
     provider: statement.provider,
     accountId: account.id,
@@ -145,6 +159,8 @@ async function buildPreview(fileName: string, upload: unknown): Promise<ImportPr
     pendingCount: fresh.filter((r) => r.result.classification === 'pending').length,
     balanceBreaks: countBalanceBreaks(statement.rows),
     chequeMatches: fresh.filter((r) => r.chequeId).length,
+    closedMonths,
+    gap,
     errors: statement.errors,
   }
 }
@@ -165,13 +181,19 @@ export async function previewTreasuryImport(
 /** Paso 2: vuelve a calcular la vista previa en el servidor y guarda sólo los nuevos. */
 export async function confirmTreasuryImport(
   fileName: string,
-  upload: StatementUpload
+  upload: StatementUpload,
+  options: { allowClosedMonths?: boolean } = {}
 ): Promise<ActionState & { imported?: number }> {
   try {
     const session = await requireSuperadmin()
     const preview = await buildPreview(fileName, upload)
     const fresh = preview.rows.filter((r) => !r.isDuplicate)
     if (fresh.length === 0) return { error: 'No hay movimientos nuevos: todo el extracto ya estaba cargado' }
+    if (preview.closedMonths.length > 0 && !options.allowClosedMonths) {
+      return {
+        error: `Este extracto trae movimientos de ${preview.closedMonths.map(formatMonthLabel).join(', ')}, que ya está cerrado. Confirmá que querés cargarlos.`,
+      }
+    }
 
     const supabase = await createClient()
     const { data: batch, error: batchError } = await supabase
@@ -272,8 +294,23 @@ export async function confirmTreasuryImport(
         duplicates: preview.duplicateCount,
         balanceBreaks: preview.balanceBreaks,
         chequeMatches: preview.chequeMatches,
+        gap: preview.gap,
+        closedMonths: preview.closedMonths,
       },
     })
+    if (preview.closedMonths.length > 0) {
+      const inClosed = fresh.filter((r) => preview.closedMonths.includes(r.txDate.slice(0, 7)))
+      await logAudit({
+        action: AUDIT_ACTIONS.treasuryClosedMonthImport,
+        entityType: 'treasury_import_batch',
+        entityId: batch.id,
+        summary: `Cargó ${inClosed.length} movimiento${inClosed.length === 1 ? '' : 's'} en ${preview.closedMonths.map(formatMonthLabel).join(', ')} de ${preview.accountName}, que estaba cerrado`,
+        metadata: {
+          months: preview.closedMonths,
+          total: Math.round(inClosed.reduce((a, r) => a + r.amount, 0) * 100) / 100,
+        },
+      })
+    }
     revalidateTreasury()
     return {
       success: `Importados ${fresh.length} movimientos: ${preview.autoCount} clasificados, ${preview.pendingCount} pendientes${preview.chequeMatches ? ` · ${preview.chequeMatches} cheques vinculados` : ''}`,
@@ -290,6 +327,12 @@ export async function deleteImportBatch(batchId: string): Promise<ActionState> {
     await requireSuperadmin()
     const supabase = await createClient()
     const now = new Date().toISOString()
+    const { data: batchTxs } = await supabase
+      .from('treasury_transactions')
+      .select('account_id, tx_date')
+      .eq('import_batch_id', batchId)
+      .is('deleted_at', null)
+    await assertMonthsOpen((batchTxs ?? []).map((t) => ({ accountId: t.account_id as string, date: t.tx_date as string })))
     const { data: removed, error: txError } = await supabase
       .from('treasury_transactions')
       .update({ deleted_at: now })

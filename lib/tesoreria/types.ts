@@ -106,6 +106,23 @@ export type TreasuryTransaction = {
   deletedAt: string | null
 }
 
+export type TreasuryReceivedChequeStatus = 'cartera' | 'depositado' | 'descontado' | 'endosado' | 'rechazado'
+
+export type TreasuryReceivedCheque = {
+  id: string
+  chequeNumber: string
+  bankName: string | null
+  issuerName: string
+  issuerCuit: string | null
+  amount: number
+  receivedDate: string | null
+  paymentDate: string | null
+  status: TreasuryReceivedChequeStatus
+  settlementTransactionId: string | null
+  endorsedTo: string | null
+  notes: string | null
+}
+
 export type TreasuryCheque = {
   id: string
   accountId: string
@@ -174,5 +191,9 @@ export type ImportPreview = {
   pendingCount: number
   balanceBreaks: number
   chequeMatches: number
+  /** Meses cerrados (yyyy-mm) en los que caerían movimientos nuevos. */
+  closedMonths: string[]
+  /** Hueco entre lo ya cargado y este archivo, si el saldo no encadena. */
+  gap: import('./closing').ImportGap | null
   errors: string[]
 }

@@ -391,3 +391,92 @@ test('cheques: estado y cheques por debitar', async () => {
   )
   assert.deepEqual(outlook, { pendingCount: 3, pendingAmount: 600, next7Amount: 400, overdueCount: 1 })
 })
+
+// ---------------------------------------------------------------------------
+// Huecos, cierres, proyección y agrupado de comisiones
+// ---------------------------------------------------------------------------
+
+test('hueco entre extractos: avisa si el saldo inicial del archivo no encadena', async () => {
+  const { detectImportGap } = await import('@/lib/tesoreria/closing')
+  const rows = [
+    { txDate: '2026-11-03', amount: -100, bankBalance: 900, statementOrder: 0 },
+    { txDate: '2026-11-04', amount: 50, bankBalance: 950, statementOrder: 1 },
+  ]
+  // El último cargado fue el 30/10 con saldo 1000 → el archivo arranca con 1000: sin hueco
+  assert.equal(detectImportGap({ txDate: '2026-10-30', bankBalance: 1000 }, rows, 0), null)
+  // Faltó el 31/10 (−200): el archivo arranca con 1000 pero lo cargado termina en 1200
+  const gap = detectImportGap({ txDate: '2026-10-30', bankBalance: 1200 }, rows, 0)
+  assert.equal(gap?.difference, -200)
+  assert.equal(gap?.fileStartDate, '2026-11-03')
+  // Si se superpone con lo cargado, la continuidad ya está probada
+  assert.equal(detectImportGap({ txDate: '2026-10-30', bankBalance: 1200 }, rows, 3), null)
+  // Primera importación de la cuenta
+  assert.equal(detectImportGap(null, rows, 0), null)
+})
+
+test('cierres: saldo del sistema vs banco, pendientes y meses cerrados', async () => {
+  const { buildCloseRows, closedMonthsTouched, monthEnd } = await import('@/lib/tesoreria/closing')
+  assert.equal(monthEnd('2026-02'), '2026-02-28')
+  const account = { id: 'acc', code: 'macro', name: 'Macro', kind: 'bank' as const, provider: 'macro' as const, currency: 'ARS', openingBalance: 100, openingDate: '2026-10-01', isActive: true, sortOrder: 1 }
+  const txs = [
+    tx({ accountId: 'acc', txDate: '2026-10-05', amount: 50, bankBalance: 150, statementOrder: 0 }),
+    tx({ accountId: 'acc', txDate: '2026-10-31', amount: -30, bankBalance: 120, statementOrder: 1, classification: 'pending' }),
+    tx({ accountId: 'acc', txDate: '2026-11-02', amount: -20, bankBalance: 100, statementOrder: 2 }),
+  ]
+  const [oct] = buildCloseRows([account], txs, [], [], ['2026-10'])
+  assert.equal(oct.systemBalance, 120)
+  assert.equal(oct.referenceBalance, 120)
+  assert.equal(oct.difference, 0)
+  assert.equal(oct.pendingCount, 1)
+  assert.equal(oct.movementCount, 2)
+
+  const closes = [{ id: 'c', accountId: 'acc', month: '2026-10', systemBalance: 120, bankBalance: 120, difference: 0, pendingCount: 0, notes: null, status: 'closed' as const, closedAt: '', reopenedAt: null, reopenReason: null }]
+  assert.deepEqual(closedMonthsTouched('acc', ['2026-10-31', '2026-11-01'], closes), ['2026-10'])
+  assert.deepEqual(closedMonthsTouched('otra', ['2026-10-31'], closes), [])
+})
+
+test('proyección: ítems recurrentes, cheques y semana en negativo', async () => {
+  const { expandForecastItems, chequeOccurrences, weeklyProjection } = await import('@/lib/tesoreria/forecast')
+  const occ = expandForecastItems(
+    [
+      { id: 's', name: 'Sueldos', amount: -1000, frequency: 'monthly', startDate: '2026-01-01', endDate: null, dayOfMonth: 31, accountId: 'acc', categoryId: null, isActive: true, notes: null },
+      { id: 'c', name: 'Cobro Arcor', amount: 3000, frequency: 'once', startDate: '2026-11-20', endDate: null, dayOfMonth: null, accountId: 'acc', categoryId: null, isActive: true, notes: null },
+      { id: 'w', name: 'Peajes', amount: -100, frequency: 'weekly', startDate: '2026-10-05', endDate: null, dayOfMonth: null, accountId: 'acc', categoryId: null, isActive: true, notes: null },
+      { id: 'x', name: 'Inactivo', amount: -999, frequency: 'once', startDate: '2026-11-02', endDate: null, dayOfMonth: null, accountId: 'acc', categoryId: null, isActive: false, notes: null },
+    ],
+    '2026-11-01',
+    '2026-12-31'
+  )
+  // Sueldos el 30/11 (noviembre no tiene 31) y el 31/12
+  assert.deepEqual(occ.filter((o) => o.refId === 's').map((o) => o.date), ['2026-11-30', '2026-12-31'])
+  // Peajes cada lunes desde el 05/10 → primer lunes de noviembre: 02/11
+  assert.equal(occ.find((o) => o.refId === 'w')?.date, '2026-11-02')
+  assert.ok(!occ.some((o) => o.refId === 'x'))
+
+  const cheques = chequeOccurrences(
+    [cheque({ id: 'k', amount: 500, paymentDate: '2026-10-20' })], // vencido: cae hoy
+    '2026-11-01'
+  )
+  assert.equal(cheques[0].date, '2026-11-01')
+
+  const p = weeklyProjection({ startBalance: 400, today: '2026-11-01', weeks: 2, occurrences: [...occ, ...cheques] })
+  // Semana 1: −500 cheque −100 peaje → −200
+  assert.equal(p.weeks[0].closing, -200)
+  assert.equal(p.firstNegativeWeekStart, '2026-11-01')
+})
+
+test('agrupa comisión + IVA con el mismo número de transacción', async () => {
+  const { groupFeeLines } = await import('@/lib/tesoreria/grouping')
+  const entries = groupFeeLines([
+    tx({ id: 'a', accountId: 'm', txDate: '2026-10-19', reference: '67716465', descriptionNorm: 'COMISION CHEQUE CONSULTA', amount: -22900 }),
+    tx({ id: 'b', accountId: 'm', txDate: '2026-10-19', reference: '67716465', descriptionNorm: 'DEBITO FISCAL IVA PERCEPCION', amount: -687 }),
+    tx({ id: 'c', accountId: 'm', txDate: '2026-10-19', reference: '67716465', descriptionNorm: 'DEBITO FISCAL IVA BASICO', amount: -4809 }),
+    tx({ id: 'd', accountId: 'm', txDate: '2026-10-19', reference: '67716465', descriptionNorm: 'CHEQUE P/CAMARA', amount: -600000 }),
+    tx({ id: 'e', accountId: 'm', txDate: '2026-10-19', reference: '1', descriptionNorm: 'DEBITO FISCAL IVA BASICO', amount: -1 }), // IVA suelto
+  ])
+  assert.equal(entries.length, 3)
+  const group = entries.find((e) => e.type === 'group')
+  assert.ok(group && group.type === 'group')
+  assert.equal(group.main.id, 'a')
+  assert.equal(group.total, -28396)
+})

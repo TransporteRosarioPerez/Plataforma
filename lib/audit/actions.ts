@@ -83,6 +83,16 @@ export const AUDIT_ACTIONS = {
   treasuryChequeUpsert: 'treasury.cheque.upsert',
   treasuryChequeStatus: 'treasury.cheque.status',
   treasuryChequeDelete: 'treasury.cheque.delete',
+  treasuryClosedMonthImport: 'treasury.import.closed_month',
+  treasuryMonthClose: 'treasury.month.close',
+  treasuryMonthReopen: 'treasury.month.reopen',
+  treasuryCashCount: 'treasury.cash_count.create',
+  treasuryCashCountDelete: 'treasury.cash_count.delete',
+  treasuryForecastUpsert: 'treasury.forecast.upsert',
+  treasuryForecastDelete: 'treasury.forecast.delete',
+  treasuryReceivedChequeUpsert: 'treasury.received_cheque.upsert',
+  treasuryReceivedChequeSettle: 'treasury.received_cheque.settle',
+  treasuryReceivedChequeDelete: 'treasury.received_cheque.delete',
 } as const
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS]
@@ -172,6 +182,16 @@ export const auditActionLabels: Record<AuditAction, string> = {
   [AUDIT_ACTIONS.treasuryChequeUpsert]: 'Tesorería: cheque',
   [AUDIT_ACTIONS.treasuryChequeStatus]: 'Tesorería: cheque anulado/reactivado',
   [AUDIT_ACTIONS.treasuryChequeDelete]: 'Tesorería: cheque eliminado',
+  [AUDIT_ACTIONS.treasuryClosedMonthImport]: 'Tesorería: carga en mes cerrado',
+  [AUDIT_ACTIONS.treasuryMonthClose]: 'Tesorería: mes cerrado',
+  [AUDIT_ACTIONS.treasuryMonthReopen]: 'Tesorería: mes reabierto',
+  [AUDIT_ACTIONS.treasuryCashCount]: 'Tesorería: arqueo de efectivo',
+  [AUDIT_ACTIONS.treasuryCashCountDelete]: 'Tesorería: arqueo eliminado',
+  [AUDIT_ACTIONS.treasuryForecastUpsert]: 'Tesorería: ítem de proyección',
+  [AUDIT_ACTIONS.treasuryForecastDelete]: 'Tesorería: ítem de proyección eliminado',
+  [AUDIT_ACTIONS.treasuryReceivedChequeUpsert]: 'Tesorería: cheque recibido',
+  [AUDIT_ACTIONS.treasuryReceivedChequeSettle]: 'Tesorería: cheque recibido depositado/descontado',
+  [AUDIT_ACTIONS.treasuryReceivedChequeDelete]: 'Tesorería: cheque recibido eliminado',
 }
 
 export const auditActionOptions = Object.entries(auditActionLabels).map(([value, label]) => ({
@@ -198,7 +218,13 @@ export function getEntityHref(entityType: string | null, entityId: string | null
     case 'treasury_import_batch':
       return '/app/tesoreria/movimientos'
     case 'treasury_cheque':
+    case 'treasury_received_cheque':
       return '/app/tesoreria/cheques'
+    case 'treasury_month_close':
+    case 'treasury_cash_count':
+      return '/app/tesoreria/cierres'
+    case 'treasury_forecast_item':
+      return '/app/tesoreria/proyeccion'
   }
   return null
 }

@@ -11,6 +11,7 @@ import { logAudit } from '@/lib/audit/log'
 import { revalidateTreasury } from './revalidate'
 import { linkedTransactionIds } from './restore'
 import { syncChequesForTransactions } from './cheques-sync'
+import { assertMonthsOpen } from './month-guard'
 import { getCategories, getCounterparties, getRules, getTransactions } from './data'
 import { classify, isValidRulePattern, manualClassification } from '../engine'
 import { normalizeDescription, roundMoney } from '../text'
@@ -252,6 +253,11 @@ export async function createManualTransaction(input: ManualTransactionInput): Pr
     const supabase = await createClient()
     const amount = roundMoney(data.amount)
 
+    await assertMonthsOpen([
+      { accountId: data.accountId, date: data.txDate },
+      ...(data.type === 'transfer' ? [{ accountId: data.toAccountId, date: data.txDate }] : []),
+    ])
+
     if (data.type === 'transfer') {
       if (data.accountId === data.toAccountId) return { error: 'Elegí dos cuentas distintas' }
       const categories = await getCategories()
@@ -367,6 +373,8 @@ export async function deleteTransaction(id: string): Promise<ActionState> {
     if (!uuid.safeParse(id).success) return { error: 'Datos inválidos' }
     const ids = await linkedTransactionIds(id)
     const supabase = await createClient()
+    const { data: affected } = await supabase.from('treasury_transactions').select('account_id, tx_date').in('id', ids)
+    await assertMonthsOpen((affected ?? []).map((t) => ({ accountId: t.account_id as string, date: t.tx_date as string })))
     const { data, error } = await supabase
       .from('treasury_transactions')
       .update({ deleted_at: new Date().toISOString() })

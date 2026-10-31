@@ -4,6 +4,7 @@ import { restoreUpdate } from '@/lib/db/soft-delete'
 import type { ActionState } from '@/lib/validations/parse-form'
 import { revalidateTreasury } from './revalidate'
 import { syncCheque, syncChequesForTransactions } from './cheques-sync'
+import { assertMonthsOpen, ClosedMonthError } from './month-guard'
 
 /**
  * Devuelve el movimiento y, si corresponde, su par creado por el sistema
@@ -34,6 +35,8 @@ function duplicateMessage(message: string, fallback: string) {
 export async function restoreTreasuryTransaction(id: string): Promise<ActionState> {
   const supabase = await createClient()
   const ids = await linkedTransactionIds(id)
+  const guard = await guardRestore(ids)
+  if (guard) return guard
   const { error } = await supabase.from('treasury_transactions').update(restoreUpdate).in('id', ids)
   if (error) {
     return { error: duplicateMessage(error.message, 'No se puede recuperar: ese movimiento ya se volvió a importar') }
@@ -52,6 +55,13 @@ export async function restoreTreasuryImportBatch(id: string): Promise<ActionStat
     .eq('id', id)
     .single()
   if (batchError || !batch?.deleted_at) return { error: 'Importación no encontrada' }
+  const { data: batchTxs } = await supabase
+    .from('treasury_transactions')
+    .select('id')
+    .eq('import_batch_id', id)
+    .eq('deleted_at', batch.deleted_at)
+  const guard = await guardRestore((batchTxs ?? []).map((t) => t.id as string))
+  if (guard) return guard
 
   const { error: txError } = await supabase
     .from('treasury_transactions')
@@ -83,4 +93,38 @@ export async function restoreTreasuryCheque(id: string): Promise<ActionState> {
   await syncCheque(id)
   revalidateTreasury()
   return { success: 'Cheque recuperado' }
+}
+
+/** Restaurar movimientos cambia saldos: no se permite en meses cerrados. */
+async function guardRestore(ids: string[]): Promise<ActionState | null> {
+  if (ids.length === 0) return null
+  const supabase = await createClient()
+  const { data } = await supabase.from('treasury_transactions').select('account_id, tx_date').in('id', ids)
+  try {
+    await assertMonthsOpen((data ?? []).map((t) => ({ accountId: t.account_id as string, date: t.tx_date as string })))
+    return null
+  } catch (e) {
+    if (e instanceof ClosedMonthError) return { error: e.message }
+    throw e
+  }
+}
+
+/** Restaura un arqueo junto con su ajuste (si se había registrado). */
+export async function restoreTreasuryCashCount(id: string): Promise<ActionState> {
+  const supabase = await createClient()
+  const { data: count } = await supabase
+    .from('treasury_cash_counts')
+    .select('adjustment_transaction_id')
+    .eq('id', id)
+    .single()
+  if (!count) return { error: 'Arqueo no encontrado' }
+  if (count.adjustment_transaction_id) {
+    const guard = await guardRestore([count.adjustment_transaction_id as string])
+    if (guard) return guard
+    await supabase.from('treasury_transactions').update(restoreUpdate).eq('id', count.adjustment_transaction_id)
+  }
+  const { error } = await supabase.from('treasury_cash_counts').update(restoreUpdate).eq('id', id)
+  if (error) return { error: error.message }
+  revalidateTreasury()
+  return { success: 'Arqueo recuperado' }
 }

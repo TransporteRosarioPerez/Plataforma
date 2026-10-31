@@ -6,6 +6,10 @@ import {
   BATCH_COLUMNS,
   CATEGORY_COLUMNS,
   CHEQUE_COLUMNS,
+  CASH_COUNT_COLUMNS,
+  FORECAST_COLUMNS,
+  MONTH_CLOSE_COLUMNS,
+  RECEIVED_CHEQUE_COLUMNS,
   COUNTERPARTY_COLUMNS,
   RULE_COLUMNS,
   TRANSACTION_COLUMNS,
@@ -13,6 +17,10 @@ import {
   mapBatch,
   mapCategory,
   mapCheque,
+  mapCashCount,
+  mapForecastItem,
+  mapMonthClose,
+  mapReceivedCheque,
   mapCounterparty,
   mapRule,
   mapTransaction,
@@ -174,4 +182,74 @@ export async function getCheques(accountId?: string): Promise<TreasuryCheque[]> 
       .order('created_at', { ascending: false })
       .range(from, to)
   }, mapCheque)
+}
+
+export async function getMonthCloses(): Promise<import('../closing').MonthClose[]> {
+  await requireSuperadmin()
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('treasury_month_closes')
+    .select(MONTH_CLOSE_COLUMNS)
+    .order('month', { ascending: false })
+    .order('closed_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(mapMonthClose)
+}
+
+export async function getCashCounts(): Promise<import('../closing').CashCount[]> {
+  await requireSuperadmin()
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('treasury_cash_counts')
+    .select(CASH_COUNT_COLUMNS)
+    .is('deleted_at', null)
+    .order('count_date', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(mapCashCount)
+}
+
+export async function getForecastItems(): Promise<import('../forecast').ForecastItem[]> {
+  await requireSuperadmin()
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('treasury_forecast_items')
+    .select(FORECAST_COLUMNS)
+    .is('deleted_at', null)
+    .order('start_date')
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(mapForecastItem)
+}
+
+export async function getReceivedCheques(): Promise<import('../types').TreasuryReceivedCheque[]> {
+  await requireSuperadmin()
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('treasury_received_cheques')
+    .select(RECEIVED_CHEQUE_COLUMNS)
+    .is('deleted_at', null)
+    .order('payment_date', { ascending: false, nullsFirst: true })
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(mapReceivedCheque)
+}
+
+/** Último saldo informado por el banco hasta `date` (para detectar huecos entre extractos). */
+export async function getLastLoadedBalance(
+  accountId: string,
+  date: string
+): Promise<{ txDate: string; bankBalance: number } | null> {
+  await requireSuperadmin()
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('treasury_transactions')
+    .select('tx_date, bank_balance')
+    .eq('account_id', accountId)
+    .is('deleted_at', null)
+    .not('bank_balance', 'is', null)
+    .lte('tx_date', date)
+    .order('tx_date', { ascending: false })
+    .order('statement_order', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const row = data?.[0]
+  return row ? { txDate: row.tx_date as string, bankBalance: Number(row.bank_balance) } : null
 }

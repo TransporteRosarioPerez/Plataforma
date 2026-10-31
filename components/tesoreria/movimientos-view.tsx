@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeftRight, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { ArrowLeftRight, ChevronDown, ChevronRight, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,8 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { deleteTransaction } from '@/lib/tesoreria/server/actions-transactions'
 import type { TreasuryAccount, TreasuryCategory, TreasuryTransaction } from '@/lib/tesoreria/types'
+import { groupFeeLines } from '@/lib/tesoreria/grouping'
+import { cn } from '@/lib/utils'
 import { ClassifyDialog } from './classify-dialog'
 import { ManualTransactionDialog } from './manual-transaction-dialog'
 import { amountClass, classificationLabels, formatDate, formatMoney, scopeLabels } from './format'
@@ -42,6 +44,8 @@ export function MovimientosView({ accounts, categories, transactions, filters }:
   const [editing, setEditing] = useState<TreasuryTransaction | null>(null)
   const [manualOpen, setManualOpen] = useState(false)
   const [search, setSearch] = useState(filters.q)
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
+  const entries = useMemo(() => groupFeeLines(transactions), [transactions])
 
   const accountName = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])
   const categoryName = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories])
@@ -61,6 +65,48 @@ export function MovimientosView({ accounts, categories, transactions, filters }:
       return acc
     },
     { in: 0, out: 0 }
+  )
+
+  const renderRow = (tx: TreasuryTransaction, nested = false) => (
+                <TableRow key={tx.id} className={cn(tx.isInternal && 'text-muted-foreground', nested && 'bg-muted/30 text-sm')}>
+                  <TableCell className="whitespace-nowrap tabular-nums">{formatDate(tx.txDate)}</TableCell>
+                  <TableCell className="whitespace-nowrap">{accountName.get(tx.accountId)}</TableCell>
+                  <TableCell className="max-w-[360px]">
+                    <div className="truncate font-mono text-xs" title={tx.descriptionRaw}>{tx.descriptionRaw}</div>
+                    {tx.notes && <div className="truncate text-xs text-muted-foreground">{tx.notes}</div>}
+                  </TableCell>
+                  <TableCell>
+                    {tx.classification === 'pending' ? (
+                      <Badge variant="outline" className="border-amber-300 text-amber-800 dark:text-amber-300">
+                        {classificationLabels.pending}
+                      </Badge>
+                    ) : (
+                      <span className="flex items-center gap-1.5">
+                        {tx.isInternal && <ArrowLeftRight className="h-3.5 w-3.5" />}
+                        {tx.categoryId ? categoryName.get(tx.categoryId) : '—'}
+                        {tx.classification === 'manual' && (
+                          <span className="text-[10px] uppercase text-muted-foreground">manual</span>
+                        )}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell>{tx.scope ? scopeLabels[tx.scope] : '—'}</TableCell>
+                  <TableCell className={`text-right font-medium tabular-nums ${amountClass(tx.amount)}`}>
+                    {formatMoney(tx.amount)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end">
+                      {tx.source !== 'transfer_mirror' && (
+                        <Button variant="ghost" size="icon" onClick={() => setEditing(tx)} title="Clasificar">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="icon" onClick={() => onDelete(tx)} title="Enviar a la papelera">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
   )
 
   const onDelete = async (tx: TreasuryTransaction) => {
@@ -168,47 +214,44 @@ export function MovimientosView({ accounts, categories, transactions, filters }:
                   </TableCell>
                 </TableRow>
               )}
-              {transactions.map((tx) => (
-                <TableRow key={tx.id} className={tx.isInternal ? 'text-muted-foreground' : undefined}>
-                  <TableCell className="whitespace-nowrap tabular-nums">{formatDate(tx.txDate)}</TableCell>
-                  <TableCell className="whitespace-nowrap">{accountName.get(tx.accountId)}</TableCell>
-                  <TableCell className="max-w-[360px]">
-                    <div className="truncate font-mono text-xs" title={tx.descriptionRaw}>{tx.descriptionRaw}</div>
-                    {tx.notes && <div className="truncate text-xs text-muted-foreground">{tx.notes}</div>}
-                  </TableCell>
-                  <TableCell>
-                    {tx.classification === 'pending' ? (
-                      <Badge variant="outline" className="border-amber-300 text-amber-800 dark:text-amber-300">
-                        {classificationLabels.pending}
-                      </Badge>
-                    ) : (
-                      <span className="flex items-center gap-1.5">
-                        {tx.isInternal && <ArrowLeftRight className="h-3.5 w-3.5" />}
-                        {tx.categoryId ? categoryName.get(tx.categoryId) : '—'}
-                        {tx.classification === 'manual' && (
-                          <span className="text-[10px] uppercase text-muted-foreground">manual</span>
+              {entries.map((entry) =>
+                entry.type === 'single' ? (
+                  renderRow(entry.tx)
+                ) : (
+                  <Fragment key={entry.key}>
+                    <TableRow
+                      className="cursor-pointer"
+                      onClick={() => {
+                        const next = new Set(openGroups)
+                        if (next.has(entry.key)) next.delete(entry.key)
+                        else next.add(entry.key)
+                        setOpenGroups(next)
+                      }}
+                    >
+                      <TableCell className="whitespace-nowrap tabular-nums">{formatDate(entry.main.txDate)}</TableCell>
+                      <TableCell className="whitespace-nowrap">{accountName.get(entry.main.accountId)}</TableCell>
+                      <TableCell className="max-w-[360px]">
+                        <div className="flex items-center gap-1 truncate font-mono text-xs">
+                          {openGroups.has(entry.key) ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+                          {entry.main.descriptionRaw} + IVA
+                          <span className="ml-1 font-sans text-muted-foreground">({entry.members.length} líneas)</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {entry.members.some((m) => m.classification === 'pending') ? (
+                          <Badge variant="outline" className="border-amber-300 text-amber-800 dark:text-amber-300">{classificationLabels.pending}</Badge>
+                        ) : (
+                          [...new Set(entry.members.map((m) => (m.categoryId ? categoryName.get(m.categoryId) : '—')))].join(', ')
                         )}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell>{tx.scope ? scopeLabels[tx.scope] : '—'}</TableCell>
-                  <TableCell className={`text-right font-medium tabular-nums ${amountClass(tx.amount)}`}>
-                    {formatMoney(tx.amount)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end">
-                      {tx.source !== 'transfer_mirror' && (
-                        <Button variant="ghost" size="icon" onClick={() => setEditing(tx)} title="Clasificar">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="icon" onClick={() => onDelete(tx)} title="Enviar a la papelera">
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      </TableCell>
+                      <TableCell>{entry.main.scope ? scopeLabels[entry.main.scope] : '—'}</TableCell>
+                      <TableCell className={`text-right font-medium tabular-nums ${amountClass(entry.total)}`}>{formatMoney(entry.total)}</TableCell>
+                      <TableCell />
+                    </TableRow>
+                    {openGroups.has(entry.key) && entry.members.map((m) => renderRow(m, true))}
+                  </Fragment>
+                )
+              )}
             </TableBody>
           </Table>
         </CardContent>

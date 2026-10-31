@@ -13,7 +13,9 @@ separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las
    - Antes de guardar hay una vista previa que muestra:
      - cuántos movimientos son nuevos y cuántos ya estaban cargados,
      - cuántos se clasifican solos y cuántos quedan pendientes,
-     - si el saldo del banco no encadena en algún punto.
+     - si el saldo del banco no encadena en algún punto,
+     - si **falta un extracto**: el saldo con el que arranca el archivo no coincide con el último saldo cargado de esa cuenta (sólo cuando no se superponen),
+     - si trae movimientos de un **mes cerrado**.
 2. **Pendientes.** Se clasifica lo que el sistema no pudo deducir: una **categoría** y un **ámbito** (Empresa o Personal).
    - Al clasificar se puede "enseñar" al sistema de dos maneras: recordar el CUIT de la contraparte o crear una regla por texto.
    - En los dos casos, los demás pendientes que coinciden se clasifican solos.
@@ -23,8 +25,14 @@ separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las
    - Si el cheque se registra después de importar el débito, también se vincula al guardarlo.
    - Las multas por rechazo (que traen el número de cheque) lo marcan como **rechazado**.
    - Se ve cuánto hay en cheques emitidos que todavía no se debitaron (y cuánto vence en 7 días), y la lista de **débitos de cheques sin registrar**, con un botón para registrarlos.
-4. **Movimientos.** Tabla con filtros y edición. Desde acá se carga a mano el **efectivo** y las transferencias entre cuentas.
-5. **Resumen.** Muestra para el mes elegido:
+   - Pestaña **Recibidos**: cheques de terceros (en cartera, depositado, descontado, endosado o rechazado). Al vincular un descuento con su crédito del banco ("CCERR OVER CASH"), queda el **costo del descuento**: valor de los cheques menos lo acreditado.
+4. **Proyección.** Saldo de hoy, menos los cheques emitidos por debitar, más/menos los ingresos y gastos esperados (únicos, semanales o mensuales), semana por semana durante 8 semanas. Marca el punto más bajo y la primera semana en descubierto. Sugiere como mensuales las categorías que se repitieron en los últimos 3 meses.
+5. **Cierres.** Por cuenta y por mes: movimientos, pendientes, saldo del sistema contra el del banco (o el último arqueo, para efectivo).
+   - Cerrar guarda una foto. En un mes cerrado no se pueden cargar, borrar ni restaurar movimientos sin reabrirlo antes, y para reabrir hay que poner el motivo (queda en el historial y en Auditoría).
+   - Si un extracto trae movimientos de un mes cerrado, la importación lo avisa y hay que confirmarlo a propósito. Queda registrado en Auditoría.
+   - **Arqueo de efectivo:** se carga lo contado y se compara con el sistema. Opcionalmente se registra el ajuste en "Diferencias de caja".
+6. **Movimientos.** Tabla con filtros y edición. Desde acá se carga a mano el **efectivo** y las transferencias entre cuentas.
+7. **Resumen.** Muestra para el mes elegido:
    - ingresos, egresos, resultado y gastos personales, con un switch **Todo / Empresa / Personal**,
    - el saldo de cada cuenta según el sistema, comparado con el último saldo informado por el banco.
 
@@ -50,6 +58,11 @@ separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las
 | `supabase/migrations/019_tesoreria.sql` | Tablas, RLS, seeds de cuentas, categorías y 21 reglas sacadas de los extractos de octubre 2026 |
 | `supabase/migrations/020_tesoreria_mercadopago_rules.sql` | Reglas para Mercado Pago (se puede correr más de una vez) |
 | `supabase/migrations/021_tesoreria_cheques.sql` | Registro de cheques emitidos |
+| `supabase/migrations/022_tesoreria_control.sql` | Cierres mensuales, arqueos, proyección y cheques recibidos |
+| `lib/tesoreria/closing.ts` | Saldos a una fecha, filas de cierre, huecos entre extractos |
+| `lib/tesoreria/forecast.ts` | Expansión de ítems recurrentes y proyección semanal |
+| `lib/tesoreria/grouping.ts` | Agrupa comisión + IVA (sólo visual) |
+| `lib/tesoreria/server/month-guard.ts` | Bloquea cambios de saldo en meses cerrados |
 | `lib/tesoreria/cheques.ts` | Detección de débitos/rechazos de cheques, matching, estado y cheques por debitar |
 | `lib/tesoreria/server/cheques-sync.ts` | Vincula cheques con débitos; se llama al guardar, importar, borrar y restaurar |
 | `lib/tesoreria/mercadopago.ts` | Texto del PDF de Mercado Pago → celdas |
@@ -81,7 +94,4 @@ Además, cruza los movimientos con el saldo inicial y final que trae el propio P
 ## Pendiente (próximas iteraciones)
 
 - **Contrapartes por nombre en Mercado Pago:** el PDF no trae CUIT, así que hoy se aprende con reglas por texto.
-- **Cheques de terceros recibidos y descontados** (hoy sólo se registran los emitidos).
-- **Cierre mensual:** comparar el saldo real con el del sistema y bloquear el mes.
-- **Arqueo de efectivo.**
-- **Agrupar comisión + IVA:** comparten el número de transacción en Macro.
+- **Proyección por cobros de facturas:** hoy los cobros esperados se cargan a mano.

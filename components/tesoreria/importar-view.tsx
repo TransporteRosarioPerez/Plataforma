@@ -26,6 +26,7 @@ import type {
   TreasuryImportBatch,
 } from '@/lib/tesoreria/types'
 import { amountClass, formatDate, formatDateTime, formatMoney, scopeLabels } from './format'
+import { formatMonthLabel } from '@/lib/tesoreria/closing-labels'
 
 const ACCEPT = '.xls,.xlsx,.csv,.pdf'
 // Límite de las server actions de Next (1 MB) con margen por el base64.
@@ -86,6 +87,7 @@ export function ImportarView({ accounts, categories, batches }: Props) {
   const [items, setItems] = useState<Item[] | null>(null)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [onlyPending, setOnlyPending] = useState(false)
+  const [allowClosed, setAllowClosed] = useState(false)
 
   const accountName = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])
   const categoryName = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories])
@@ -119,6 +121,7 @@ export function ImportarView({ accounts, categories, batches }: Props) {
     setItems(next)
     setSelectedKey(next.find((it) => it.preview)?.key ?? next[0]?.key ?? null)
     setOnlyPending(false)
+    setAllowClosed(false)
   }
 
   /**
@@ -131,7 +134,7 @@ export function ImportarView({ accounts, categories, batches }: Props) {
     const updated = [...items]
     for (const [i, it] of updated.entries()) {
       if (!it.preview || !it.upload || it.preview.newCount === 0 || it.result?.ok) continue
-      const result = await confirmTreasuryImport(it.fileName, it.upload)
+      const result = await confirmTreasuryImport(it.fileName, it.upload, { allowClosedMonths: allowClosed })
       updated[i] = {
         ...it,
         result: result.error ? { ok: false, message: result.error } : { ok: true, message: result.success ?? 'Importado' },
@@ -161,6 +164,8 @@ export function ImportarView({ accounts, categories, batches }: Props) {
     for (const it of items ?? []) if (it.preview) seen.set(it.preview.accountId, (seen.get(it.preview.accountId) ?? 0) + 1)
     return [...seen.values()].some((n) => n > 1)
   })()
+  const closedWarnings = ready.filter((it) => (it.preview?.closedMonths.length ?? 0) > 0)
+  const gapWarnings = (items ?? []).filter((it) => it.preview?.gap)
   const selected = items?.find((it) => it.key === selectedKey) ?? null
   const preview = selected?.preview ?? null
 
@@ -333,6 +338,10 @@ export function ImportarView({ accounts, categories, batches }: Props) {
                             <span className="text-destructive">{it.error}</span>
                           ) : it.preview && it.preview.newCount === 0 ? (
                             <span className="text-muted-foreground">Nada nuevo</span>
+                          ) : it.preview && it.preview.closedMonths.length > 0 ? (
+                            <span className="text-red-700 dark:text-red-400">Mes cerrado</span>
+                          ) : it.preview && it.preview.gap ? (
+                            <span className="text-amber-700 dark:text-amber-400">Posible hueco</span>
                           ) : it.preview && (it.preview.balanceBreaks > 0 || it.preview.errors.length > 0) ? (
                             <span className="text-amber-700 dark:text-amber-400">Listo, con avisos</span>
                           ) : (
@@ -344,6 +353,32 @@ export function ImportarView({ accounts, categories, batches }: Props) {
                   </TableBody>
                 </Table>
               </div>
+
+              {gapWarnings.map((it) => {
+                const gap = it.preview!.gap!
+                return (
+                  <div key={`gap-${it.key}`} className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      <strong>{it.preview!.accountName}: puede faltar un extracto.</strong> Lo último cargado termina el{' '}
+                      {formatDate(gap.lastLoadedDate)} con saldo {formatMoney(gap.lastLoadedBalance)}, pero este archivo arranca el{' '}
+                      {formatDate(gap.fileStartDate)} con {formatMoney(gap.fileOpeningBalance)}. Hay {formatMoney(Math.abs(gap.difference))}{' '}
+                      que {gap.difference < 0 ? 'salieron' : 'entraron'} en el medio y no están en ningún archivo. Bajá el extracto de esos días.
+                    </span>
+                  </div>
+                )
+              })}
+
+              {closedWarnings.length > 0 && (
+                <label className="flex items-start gap-2 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100">
+                  <input type="checkbox" className="mt-1" checked={allowClosed} onChange={(e) => setAllowClosed(e.target.checked)} />
+                  <span>
+                    {closedWarnings.map((it) => `${it.preview!.accountName}: ${it.preview!.closedMonths.map(formatMonthLabel).join(', ')}`).join(' · ')}{' '}
+                    {closedWarnings.length === 1 && closedWarnings[0].preview!.closedMonths.length === 1 ? 'ya está cerrado' : 'ya están cerrados'}.
+                    Si importás, esos meses cambian. Marcá esta casilla para cargarlos igual (queda registrado en Auditoría).
+                  </span>
+                </label>
+              )}
 
               {repeatedAccounts && (
                 <p className="text-xs text-muted-foreground">
@@ -432,7 +467,7 @@ export function ImportarView({ accounts, categories, batches }: Props) {
                 <Button variant="outline" onClick={() => setItems(null)} disabled={confirming}>
                   {items.some((it) => it.result?.ok) ? 'Cerrar' : 'Cancelar'}
                 </Button>
-                <Button onClick={confirm} disabled={confirming || ready.length === 0}>
+                <Button onClick={confirm} disabled={confirming || ready.length === 0 || (closedWarnings.length > 0 && !allowClosed)}>
                   {confirming
                     ? 'Importando…'
                     : ready.length > 1

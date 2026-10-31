@@ -1,6 +1,9 @@
+import type { CashCount, MonthClose } from '../closing'
+import type { ForecastItem } from '../forecast'
 import type {
   TreasuryAccount,
   TreasuryCheque,
+  TreasuryReceivedCheque,
   TreasuryCategory,
   TreasuryCounterparty,
   TreasuryImportBatch,
@@ -137,5 +140,76 @@ export function mapCheque(r: Row): TreasuryCheque {
     notes: r.notes ?? null,
     status: r.status,
     transactionId: r.transaction_id ?? null,
+  }
+}
+
+export const MONTH_CLOSE_COLUMNS =
+  'id, account_id, month, system_balance, bank_balance, difference, pending_count, notes, status, closed_at, reopened_at, reopen_reason'
+export function mapMonthClose(r: Row): MonthClose {
+  return {
+    id: r.id,
+    accountId: r.account_id,
+    month: String(r.month).slice(0, 7),
+    systemBalance: num(r.system_balance),
+    bankBalance: numOrNull(r.bank_balance),
+    difference: numOrNull(r.difference),
+    pendingCount: r.pending_count,
+    notes: r.notes ?? null,
+    status: r.status,
+    closedAt: r.closed_at,
+    reopenedAt: r.reopened_at ?? null,
+    reopenReason: r.reopen_reason ?? null,
+  }
+}
+
+export const CASH_COUNT_COLUMNS =
+  'id, account_id, count_date, counted_amount, system_amount, difference, adjustment_transaction_id, notes'
+export function mapCashCount(r: Row): CashCount {
+  return {
+    id: r.id,
+    accountId: r.account_id,
+    countDate: r.count_date,
+    countedAmount: num(r.counted_amount),
+    systemAmount: num(r.system_amount),
+    difference: num(r.difference),
+    adjustmentTransactionId: r.adjustment_transaction_id ?? null,
+    notes: r.notes ?? null,
+  }
+}
+
+export const FORECAST_COLUMNS =
+  'id, name, amount, frequency, start_date, end_date, day_of_month, account_id, category_id, is_active, notes'
+export function mapForecastItem(r: Row): ForecastItem {
+  return {
+    id: r.id,
+    name: r.name,
+    amount: num(r.amount),
+    frequency: r.frequency,
+    startDate: r.start_date,
+    endDate: r.end_date ?? null,
+    dayOfMonth: r.day_of_month ?? null,
+    accountId: r.account_id ?? null,
+    categoryId: r.category_id ?? null,
+    isActive: r.is_active,
+    notes: r.notes ?? null,
+  }
+}
+
+export const RECEIVED_CHEQUE_COLUMNS =
+  'id, cheque_number, bank_name, issuer_name, issuer_cuit, amount, received_date, payment_date, status, settlement_transaction_id, endorsed_to, notes'
+export function mapReceivedCheque(r: Row): TreasuryReceivedCheque {
+  return {
+    id: r.id,
+    chequeNumber: r.cheque_number,
+    bankName: r.bank_name ?? null,
+    issuerName: r.issuer_name,
+    issuerCuit: r.issuer_cuit ?? null,
+    amount: num(r.amount),
+    receivedDate: r.received_date ?? null,
+    paymentDate: r.payment_date ?? null,
+    status: r.status,
+    settlementTransactionId: r.settlement_transaction_id ?? null,
+    endorsedTo: r.endorsed_to ?? null,
+    notes: r.notes ?? null,
   }
 }

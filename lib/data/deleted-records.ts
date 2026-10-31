@@ -30,6 +30,9 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
     treasuryCategoriesRes,
     treasuryCounterpartiesRes,
     treasuryChequesRes,
+    treasuryReceivedRes,
+    treasuryCashCountsRes,
+    treasuryForecastRes,
   ] = await Promise.all([
     supabase
       .from('clients')
@@ -132,6 +135,21 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
     supabase
       .from('treasury_cheques')
       .select('id, cheque_number, payee_name, amount, deleted_at')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false }),
+    supabase
+      .from('treasury_received_cheques')
+      .select('id, cheque_number, issuer_name, amount, deleted_at')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false }),
+    supabase
+      .from('treasury_cash_counts')
+      .select('id, count_date, counted_amount, deleted_at')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false }),
+    supabase
+      .from('treasury_forecast_items')
+      .select('id, name, amount, deleted_at')
       .not('deleted_at', 'is', null)
       .order('deleted_at', { ascending: false }),
   ])
@@ -321,6 +339,34 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
       id: row.id,
       entity: 'treasury_cheque',
       label: `N° ${row.cheque_number} · ${row.payee_name} · ${money.format(Number(row.amount))}`,
+      deletedAt: new Date(row.deleted_at as string),
+    })
+  }
+
+  for (const row of treasuryReceivedRes.data ?? []) {
+    rows.push({
+      id: row.id,
+      entity: 'treasury_received_cheque',
+      label: `N° ${row.cheque_number} · ${row.issuer_name} · ${money.format(Number(row.amount))}`,
+      deletedAt: new Date(row.deleted_at as string),
+    })
+  }
+
+  for (const row of treasuryCashCountsRes.data ?? []) {
+    const [y, m, d] = String(row.count_date).split('-')
+    rows.push({
+      id: row.id,
+      entity: 'treasury_cash_count',
+      label: `Arqueo ${d}/${m}/${y} · ${money.format(Number(row.counted_amount))}`,
+      deletedAt: new Date(row.deleted_at as string),
+    })
+  }
+
+  for (const row of treasuryForecastRes.data ?? []) {
+    rows.push({
+      id: row.id,
+      entity: 'treasury_forecast_item',
+      label: `${row.name} · ${money.format(Number(row.amount))}`,
       deletedAt: new Date(row.deleted_at as string),
     })
   }
