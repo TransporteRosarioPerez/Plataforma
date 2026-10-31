@@ -259,13 +259,17 @@ export async function confirmTreasuryImport(
           transfer_pair_id: id,
           classification: 'auto',
           rule_id: row.result.ruleId,
+          raw_data: {},
           created_by: session.user.id,
         })
       }
     }
 
     for (let i = 0; i < inserts.length; i += 500) {
-      const { error } = await supabase.from('treasury_transactions').insert(inserts.slice(i, i + 500))
+      // defaultToNull: false → una columna que falta en alguna fila toma su valor por defecto, no null.
+      const { error } = await supabase
+        .from('treasury_transactions')
+        .insert(inserts.slice(i, i + 500), { defaultToNull: false })
       if (error) {
         // Sin transacciones en el cliente de Supabase: deshacemos el lote a mano.
         await supabase.from('treasury_transactions').delete().eq('import_batch_id', batch.id)
