@@ -23,6 +23,7 @@ import { detectImportGap } from '../closing'
 import { formatMonthLabel } from '../closing-labels'
 import { parseStatement, providerLabel } from '../parsers'
 import { isMercadoPagoText, parseMercadoPagoText } from '../mercadopago'
+import { isIcbcText, parseIcbcText } from '../icbc'
 import { extractPdfText } from './pdf'
 import { syncCheque, syncChequesForTransactions } from './cheques-sync'
 import { linkAwaitingCashTransfers } from './transfer-link'
@@ -51,11 +52,17 @@ async function uploadToCells(upload: unknown): Promise<{ cells: SheetCell[][]; w
   if (parsed.data.kind === 'cells') return { cells: parsed.data.cells as SheetCell[][], warnings: [] }
 
   const text = await extractPdfText(parsed.data.base64)
-  if (!isMercadoPagoText(text)) {
-    throw new Error('Este PDF no parece un resumen de cuenta de Mercado Pago. Macro y Nación se importan en Excel.')
+  if (isMercadoPagoText(text)) {
+    const mp = parseMercadoPagoText(text)
+    return { cells: mp.cells, warnings: mercadoPagoWarnings(mp) }
   }
-  const mp = parseMercadoPagoText(text)
-  return { cells: mp.cells, warnings: mercadoPagoWarnings(mp) }
+  if (isIcbcText(text)) {
+    const icbc = parseIcbcText(text)
+    return { cells: icbc.cells, warnings: icbc.warnings }
+  }
+  throw new Error(
+    'Este PDF no es un resumen de Mercado Pago ni de ICBC. Macro y Nación se importan en Excel.'
+  )
 }
 
 /** Cruza los movimientos leídos con el saldo inicial/final que informa el propio PDF. */

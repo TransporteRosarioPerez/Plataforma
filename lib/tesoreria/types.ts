@@ -1,6 +1,6 @@
 // Tipos del módulo Tesorería. Independiente del resto de la plataforma.
 
-export type TreasuryProvider = 'macro' | 'nacion' | 'mercadopago'
+export type TreasuryProvider = 'macro' | 'nacion' | 'mercadopago' | 'icbc'
 export type TreasuryAccountKind = 'bank' | 'wallet' | 'cash'
 export type TreasuryCategoryKind = 'income' | 'expense' | 'internal'
 export type TreasuryScope = 'empresa' | 'personal'

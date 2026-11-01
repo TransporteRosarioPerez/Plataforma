@@ -102,7 +102,7 @@ export function ImportarView({ accounts, categories, batches }: Props) {
       const key = `${i}-${file.name}`
       const lower = file.name.toLowerCase()
       if (!ACCEPT.split(',').some((ext) => lower.endsWith(ext))) {
-        next.push({ key, fileName: file.name, error: 'Formato no soportado: subí el Excel del banco o el PDF de Mercado Pago' })
+        next.push({ key, fileName: file.name, error: 'Formato no soportado: subí el Excel del banco o el PDF de Mercado Pago o ICBC' })
         continue
       }
       try {
@@ -189,7 +189,7 @@ export function ImportarView({ accounts, categories, batches }: Props) {
         <CardHeader>
           <CardTitle>Importar extracto</CardTitle>
           <CardDescription>
-            Macro y Nación: descargá los movimientos en Excel y subilo tal cual. Mercado Pago: subí el PDF del
+            Macro y Nación: descargá los movimientos en Excel y subilo tal cual. Mercado Pago e ICBC: subí el PDF del
             resumen de cuenta. La cuenta se detecta sola y los movimientos ya cargados se saltean.
           </CardDescription>
         </CardHeader>
@@ -219,7 +219,7 @@ export function ImportarView({ accounts, categories, batches }: Props) {
             <p className="text-center text-sm text-muted-foreground">
               {loading
                 ? 'Leyendo los extractos…'
-                : 'Arrastrá uno o varios archivos acá (por ejemplo Macro, Nación y Mercado Pago juntos) o hacé clic para elegirlos'}
+                : 'Arrastrá uno o varios archivos acá (por ejemplo Macro, Nación, Mercado Pago e ICBC juntos) o hacé clic para elegirlos'}
             </p>
           </div>
           <input

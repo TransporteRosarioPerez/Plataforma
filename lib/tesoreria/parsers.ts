@@ -69,6 +69,20 @@ const PROVIDERS: ProviderSpec[] = [
     },
     balanceMode: 'after',
   },
+  {
+    // ICBC sólo envía PDF: lib/tesoreria/icbc.ts lo convierte a estas celdas.
+    provider: 'icbc',
+    label: 'ICBC',
+    signature: ['fecha', 'concepto', 'comprobante icbc', 'importe', 'saldo'],
+    columns: {
+      date: ['fecha'],
+      reference: ['comprobante icbc'],
+      description: ['concepto'],
+      amount: ['importe'],
+      balance: ['saldo'],
+    },
+    balanceMode: 'after',
+  },
 ]
 
 const HEADER_SCAN_ROWS = 20
@@ -112,7 +126,7 @@ export function parseStatement(cells: SheetCell[][]): StatementParseResult {
   if (!found) {
     throw new Error(
       'Formato no reconocido. Se aceptan extractos de Banco Macro y Banco Nación (.xls) ' +
-        'y el resumen de cuenta de Mercado Pago (.pdf).'
+        'y los resúmenes en PDF de Mercado Pago e ICBC.'
     )
   }
 

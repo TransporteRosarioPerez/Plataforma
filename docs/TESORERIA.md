@@ -1,7 +1,7 @@
 # Tesorería — flujo de fondos real
 
 Módulo para superadmins que junta en un solo lugar la plata que **realmente** entra y sale:
-Banco Macro, Banco Nación, Mercado Pago y efectivo. Es la fuente de verdad de la caja, y está
+Banco Macro, Banco Nación, ICBC, Mercado Pago y efectivo. Es la fuente de verdad de la caja, y está
 separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las facturas.
 
 ## Cómo se usa (flujo semanal)
@@ -9,6 +9,7 @@ separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las
 1. **Importar.** Se pueden subir varios archivos juntos (por ejemplo Macro, Nación y Mercado Pago): hay una vista previa por archivo y se importan en orden.
    Macro y Nación: se descarga el extracto del home banking y se sube el `.xls` tal cual.
    Mercado Pago: se sube el PDF del **Resumen de cuenta**, que es el único formato que ofrece.
+   ICBC: se sube el PDF del **extracto bancario** que manda el banco.
    - El banco se detecta por los encabezados del archivo (o por el texto del PDF).
    - Antes de guardar hay una vista previa que muestra:
      - cuántos movimientos son nuevos y cuántos ya estaban cargados,
@@ -59,6 +60,7 @@ separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las
 | `supabase/migrations/020_tesoreria_mercadopago_rules.sql` | Reglas para Mercado Pago (se puede correr más de una vez) |
 | `supabase/migrations/021_tesoreria_cheques.sql` | Registro de cheques emitidos |
 | `supabase/migrations/022_tesoreria_control.sql` | Cierres mensuales, arqueos, proyección y cheques recibidos |
+| `supabase/migrations/024_tesoreria_icbc.sql` | Cuenta ICBC y sus reglas (se puede correr más de una vez) |
 | `lib/tesoreria/closing.ts` | Saldos a una fecha, filas de cierre, huecos entre extractos |
 | `lib/tesoreria/forecast.ts` | Expansión de ítems recurrentes y proyección semanal |
 | `lib/tesoreria/grouping.ts` | Agrupa comisión + IVA (sólo visual) |
@@ -66,6 +68,7 @@ separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las
 | `lib/tesoreria/cheques.ts` | Detección de débitos/rechazos de cheques, matching, estado y cheques por debitar |
 | `lib/tesoreria/server/cheques-sync.ts` | Vincula cheques con débitos; se llama al guardar, importar, borrar y restaurar |
 | `lib/tesoreria/mercadopago.ts` | Texto del PDF de Mercado Pago → celdas |
+| `lib/tesoreria/icbc.ts` | Texto del PDF de ICBC → celdas (calcula el saldo de cada fila) |
 | `lib/tesoreria/parsers.ts` | Detección del banco y parsers de Macro y Nación (celdas → `StatementRow`) |
 | `lib/tesoreria/engine.ts` | Deduplicación, control de saldos, clasificación, sugerencia de patrones, pares internos |
 | `lib/tesoreria/summary.ts` | Totales del resumen y saldos por cuenta |
@@ -83,6 +86,10 @@ El PDF de Mercado Pago se manda en base64 y se lee **en el servidor** con `unpdf
 daría una planilla, así que el resto del flujo (deduplicación por ID de operación, reglas, saldos) es el mismo.
 Además, cruza los movimientos con el saldo inicial y final que trae el propio PDF. Límite: 700 KB por PDF
 (un mes ocupa unos 65 KB).
+
+El PDF de ICBC sigue el mismo camino (`isIcbcText` / `parseIcbcText`). El extracto sólo imprime el saldo en
+algunas filas, así que el parser lo recalcula desde "SALDO ULTIMO EXTRACTO" y avisa si no coincide con un saldo
+impreso o con el "SALDO FINAL" (señal de una fila mal leída). El año sale de "PERIODO dd-mm-aaaa AL ...".
 
 ## Puesta en marcha
 

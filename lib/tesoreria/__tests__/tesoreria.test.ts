@@ -480,3 +480,43 @@ test('agrupa comisión + IVA con el mismo número de transacción', async () => 
   assert.equal(group.main.id, 'a')
   assert.equal(group.total, -28396)
 })
+
+// ICBC: texto como lo devuelve el PDF del resumen mensual (datos ficticios).
+const ICBC_TEXT = `Industrial and Commercial Bank of China (Argentina) S.A.U. Florida 99 (C1005AAA) Ciudad Autónoma de Buenos Aires.
+C.U.I.T. N° 30-70944784-6 I.V.A. Responsable Inscripto - I.B.C.M. N° 901-220515-7 F.EXTSTD V.001
+TITULAR FICTICIO
+RESUMEN MENSUAL
+PERIODO 01-12-2026 AL 31-01-2027
+CUIT N° 20-00000000-1
+INFORMACION SOBRE SU CAJA DE AHORRO EN PESOS N° 0501/00000001/21 C.B.U.: 0150 0000
+FECHA CONCEPTO F.VALOR COMPROBANTE ORIGEN CANAL DEBITOS CREDITOS SALDOS
+SALDO ULTIMO EXTRACTO AL 30/11/2026 1.000,00
+01-12 MANTENIMIENTO CAJA DE AHOR 0501 100,00-
+01-12 TRANSF. E/BCOS-ONLINE 0171 AEXT 5.000,00 5.900,00
+15-12 PAGO CUOTA PRESTAMO 0086564106 0066 2.000,00-
+15-12 ING BRUTOS PERCEP.C.A.B.A. 14-12 15050100013 0501 50,00- 3.850,00
+05-01 PAGO C/TF QR MERCADOLIBRE 0171 BACC 850,00- 3.000,00
+TOT.IMP.LEY COMP.: 0,00 TOT.LEY COMP.$ 0,00(*) SALDO FINAL AL 31/01/2027 3.000,00`
+
+test('ICBC: PDF → celdas → movimientos (año, signos y saldos)', async () => {
+  const { isIcbcText, parseIcbcText } = await import('@/lib/tesoreria/icbc')
+  assert.ok(isIcbcText(ICBC_TEXT))
+  const icbc = parseIcbcText(ICBC_TEXT)
+  assert.deepEqual(icbc.warnings, [])
+  assert.equal(icbc.openingBalance, 1000)
+  assert.equal(icbc.closingBalance, 3000)
+  const r = parseStatement(icbc.cells)
+  assert.equal(r.provider, 'icbc')
+  assert.equal(r.rows.length, 5)
+  assert.equal(r.rows[0].amount, -100) // débito con el menos al final
+  assert.equal(r.rows[1].amount, 5000) // crédito sin signo
+  assert.equal(r.rows[3].description, 'ING BRUTOS PERCEP.C.A.B.A. 14-12')
+  assert.equal(r.rows[3].reference, '15050100013')
+  assert.equal(r.rows[4].txDate, '2027-01-05') // el período cruza de año
+  assert.equal(r.rows[0].bankBalance, 900) // saldo completado aunque el banco no lo imprima
+  assert.equal(countBalanceBreaks(r.rows), 0)
+
+  // Un movimiento que falta se detecta contra el saldo que imprime el banco
+  const broken = parseIcbcText(ICBC_TEXT.replace('15-12 PAGO CUOTA PRESTAMO 0086564106 0066 2.000,00-\n', ''))
+  assert.ok(broken.warnings.length > 0)
+})
