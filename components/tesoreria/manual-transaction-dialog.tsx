@@ -136,6 +136,13 @@ export function ManualTransactionDialog({ open, onOpenChange, accounts, categori
             <Input id="manual-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder={kind === 'transfer' ? 'Ej.: depósito de efectivo' : 'Ej.: gomería ruta 9'} />
           </div>
 
+          {kind === 'transfer' && (
+            <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+              Para depósitos de efectivo en un banco o retiros que no sean por cajero. Se registra en Efectivo y,
+              cuando llega el extracto del banco, se vincula solo para no contarlo dos veces.
+            </p>
+          )}
+
           <div className={kind === 'transfer' ? 'grid grid-cols-2 gap-3' : ''}>
             <div className="space-y-2">
               <Label>{kind === 'transfer' ? 'Sale de' : 'Cuenta'}</Label>
@@ -152,7 +159,11 @@ export function ManualTransactionDialog({ open, onOpenChange, accounts, categori
                 <Select value={toAccountId} onValueChange={setToAccountId}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Cuenta" /></SelectTrigger>
                   <SelectContent>
-                    {active.filter((a) => a.id !== accountId).map((a) => (
+                    {active
+                      .filter((a) => a.id !== accountId)
+                      // Siempre una punta es Efectivo: entre bancos las dos puntas llegan en los extractos.
+                      .filter((a) => (active.find((x) => x.id === accountId)?.kind === 'cash' ? a.kind !== 'cash' : a.kind === 'cash'))
+                      .map((a) => (
                       <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                     ))}
                   </SelectContent>

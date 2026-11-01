@@ -13,7 +13,8 @@ import { linkedTransactionIds } from './restore'
 import { syncCheque, syncChequesForTransactions } from './cheques-sync'
 import { isChequeDebit, normalizeChequeNumber } from '../cheques'
 import { assertMonthsOpen } from './month-guard'
-import { getCategories, getCounterparties, getRules, getTransactions } from './data'
+import { getAccounts, getCategories, getCounterparties, getRules, getTransactions } from './data'
+import { linkAwaitingCashTransfers } from './transfer-link'
 import { classify, isValidRulePattern, manualClassification } from '../engine'
 import { isValidCuit, normalizeDescription, roundMoney } from '../text'
 
@@ -320,36 +321,58 @@ export async function createManualTransaction(input: ManualTransactionInput): Pr
 
     if (data.type === 'transfer') {
       if (data.accountId === data.toAccountId) return { error: 'Elegí dos cuentas distintas' }
+      const accounts = await getAccounts()
+      const fromAccount = accounts.find((a) => a.id === data.accountId)
+      const toAccount = accounts.find((a) => a.id === data.toAccountId)
+      if (!fromAccount || !toAccount) return { error: 'Cuenta no encontrada' }
+      const cash = fromAccount.kind === 'cash' ? fromAccount : toAccount.kind === 'cash' ? toAccount : null
+      const other = cash?.id === fromAccount.id ? toAccount : fromAccount
+      if (!cash) {
+        // Entre bancos/Mercado Pago las dos puntas llegan en los extractos: cargarlas a mano las duplicaría.
+        return {
+          error:
+            'Las transferencias entre bancos y Mercado Pago llegan en los extractos. Importalos y confirmalas en Pendientes con "Es interna".',
+        }
+      }
+
       const categories = await getCategories()
       const internal =
-        categories.find((c) => c.kind === 'internal' && c.name.toLowerCase().includes('transferencia')) ??
+        categories.find((c) => c.kind === 'internal' && c.name.toLowerCase().includes('efectivo')) ??
         categories.find((c) => c.kind === 'internal')
-      const outId = randomUUID()
-      const inId = randomUUID()
-      const common = {
+      // Sólo se carga la punta de efectivo. La del banco llega en el extracto y se vincula sola.
+      const cashAmount = cash.id === fromAccount.id ? -amount : amount
+      const id = randomUUID()
+      const { error } = await supabase.from('treasury_transactions').insert({
+        id,
+        account_id: cash.id,
+        source: 'manual',
         tx_date: data.txDate,
         description_raw: data.description,
         description_norm: normalizeDescription(data.description),
+        amount: cashAmount,
         category_id: internal?.id ?? null,
         scope: null,
         is_internal: true,
         classification: 'manual',
         notes: data.notes || null,
+        raw_data: { awaitingAccountId: other.id },
         created_by: session.user.id,
-      }
-      const { error } = await supabase.from('treasury_transactions').insert([
-        { ...common, id: outId, account_id: data.accountId, source: 'manual', amount: -amount, transfer_pair_id: inId },
-        { ...common, id: inId, account_id: data.toAccountId, source: 'transfer_mirror', amount, transfer_pair_id: outId },
-      ])
+      })
       if (error) return { error: error.message }
+      // Si el extracto del banco ya estaba importado, se vincula ahora.
+      const linked = await linkAwaitingCashTransfers(other.id)
       await logAudit({
         action: AUDIT_ACTIONS.treasuryTransactionCreate,
         entityType: 'treasury_transaction',
-        entityId: outId,
-        summary: `Registró una transferencia interna de $${amount.toLocaleString('es-AR')}: ${data.description}`,
+        entityId: id,
+        summary: `Registró ${cashAmount < 0 ? 'un depósito' : 'un retiro'} de efectivo de $${amount.toLocaleString('es-AR')} (${other.name}): ${data.description}`,
       })
       revalidateTreasury()
-      return { success: 'Transferencia registrada' }
+      return {
+        success: linked
+          ? `Registrado y vinculado con el movimiento de ${other.name} que ya estaba importado`
+          : `Registrado en Efectivo. Cuando importes el extracto de ${other.name}, se vincula solo y no se cuenta dos veces.`,
+      }
     }
 
     const categories = await getCategories()
@@ -439,9 +462,20 @@ export async function deleteTransaction(id: string): Promise<ActionState> {
       .from('treasury_transactions')
       .update({ deleted_at: new Date().toISOString() })
       .in('id', ids)
-      .select('description_raw, amount')
+      .select('description_raw, amount, source, transfer_pair_id, raw_data')
     if (error) return { error: error.message }
     await syncChequesForTransactions(ids)
+    // Si era un depósito/retiro de efectivo ya vinculado con el banco, el movimiento del banco
+    // vuelve a Pendientes (si no, quedaría como interno sin contraparte y no contaría en ningún lado).
+    for (const row of data ?? []) {
+      const raw = (row.raw_data ?? {}) as Record<string, unknown>
+      if (row.source === 'manual' && raw.awaitingAccountId && row.transfer_pair_id && !ids.includes(row.transfer_pair_id as string)) {
+        await supabase
+          .from('treasury_transactions')
+          .update({ is_internal: false, category_id: null, scope: null, classification: 'pending', transfer_pair_id: null })
+          .eq('id', row.transfer_pair_id)
+      }
+    }
     await logAudit({
       action: AUDIT_ACTIONS.treasuryTransactionDelete,
       entityType: 'treasury_transaction',

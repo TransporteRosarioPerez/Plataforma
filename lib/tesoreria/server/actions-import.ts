@@ -25,6 +25,7 @@ import { parseStatement, providerLabel } from '../parsers'
 import { isMercadoPagoText, parseMercadoPagoText } from '../mercadopago'
 import { extractPdfText } from './pdf'
 import { syncCheque, syncChequesForTransactions } from './cheques-sync'
+import { linkAwaitingCashTransfers } from './transfer-link'
 import { classifyFromCheque, matchCheque, matchRejectedCheque } from '../cheques'
 import { buildDedupKeys, classify, countBalanceBreaks } from '../engine'
 import { extractCuit, normalizeDescription } from '../text'
@@ -278,6 +279,9 @@ export async function confirmTreasuryImport(
       }
     }
 
+    // Depósitos/retiros de efectivo cargados a mano que esperaban este extracto.
+    const linkedCash = await linkAwaitingCashTransfers(preview.accountId)
+
     // Cheques del registro: quedan "debitados" (o "rechazados" si vino la multa).
     const chequeIds = new Set(
       fresh.flatMap((r) => [r.chequeId, r.rejectedChequeId]).filter((id): id is string => !!id)
@@ -317,7 +321,7 @@ export async function confirmTreasuryImport(
     }
     revalidateTreasury()
     return {
-      success: `Importados ${fresh.length} movimientos: ${preview.autoCount} clasificados, ${preview.pendingCount} pendientes${preview.chequeMatches ? ` · ${preview.chequeMatches} cheques vinculados` : ''}`,
+      success: `Importados ${fresh.length} movimientos: ${preview.autoCount} clasificados, ${preview.pendingCount} pendientes${preview.chequeMatches ? ` · ${preview.chequeMatches} cheques vinculados` : ''}${linkedCash ? ` · ${linkedCash} movimientos de efectivo vinculados` : ''}`,
       imported: fresh.length,
     }
   } catch (e) {
