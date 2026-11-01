@@ -32,10 +32,10 @@ export function TripFuelSection({ fuelTransactions }: TripFuelSectionProps) {
         <div>
           <CardTitle className="flex items-center gap-2">
             <Fuel className="h-4 w-4" />
-            Combustible importado
+            Combustible
           </CardTitle>
           <CardDescription>
-            Cargas vinculadas desde extractos YPF/Shell
+            Cargas de combustible de este viaje
             {fuelTransactions.length > 0 && (
               <> · {formatCurrency(total)} · {totalLiters.toLocaleString('es-AR', { maximumFractionDigits: 0 })} L</>
             )}
@@ -51,7 +51,7 @@ export function TripFuelSection({ fuelTransactions }: TripFuelSectionProps) {
       <CardContent>
         {fuelTransactions.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No hay cargas de combustible importadas vinculadas a este viaje.
+            No hay cargas de combustible vinculadas a este viaje.
           </p>
         ) : (
           <div className="rounded-md border overflow-x-auto">

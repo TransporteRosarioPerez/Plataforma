@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { linkFuelToTrip } from '@/lib/actions/fuel-import'
+import { linkFuelToTrip } from '@/lib/actions/fuel'
 import type { FuelTransaction } from '@/lib/types'
 import { toast } from 'sonner'
 

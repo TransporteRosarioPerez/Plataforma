@@ -1,5 +1,22 @@
-import type { FuelMatchResult, FuelMatchStatus, MatchedPlateRole, NormalizedFuelRow, TripMatchCandidate } from './types'
-import { normalizePlate } from './parse-csv'
+import type { FuelMatchStatus, MatchedPlateRole } from '@/lib/types'
+import { normalizePlate } from './resolve'
+
+export type TripMatchCandidate = {
+  tripId: string
+  tripCode: string
+  departureDate: Date
+  arrivalDate?: Date
+  truckPlate?: string
+  semiPlate?: string
+  matchedRole: MatchedPlateRole
+}
+
+export type FuelMatchResult = {
+  status: FuelMatchStatus
+  tripId?: string
+  matchedPlateRole?: MatchedPlateRole
+  candidates?: TripMatchCandidate[]
+}
 
 /** Días extra de ventana si el viaje no tiene arrival_date */
 export const FUEL_MATCH_GRACE_DAYS = 14
@@ -75,7 +92,7 @@ function sortCandidates(a: TripMatchCandidate, b: TripMatchCandidate, trips: Tri
 }
 
 export function matchFuelRowToTrips(
-  row: NormalizedFuelRow,
+  row: { plate: string; transactionAt: Date },
   trips: TripForMatching[]
 ): FuelMatchResult {
   const plate = normalizePlate(row.plate)

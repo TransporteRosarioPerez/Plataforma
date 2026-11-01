@@ -2,15 +2,15 @@ import 'server-only'
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import type {
-  FuelImportBatch,
   FuelMatchMethod,
   FuelMatchStatus,
+  FuelPaymentMethod,
   FuelProductKind,
   FuelProvider,
   FuelTransaction,
   MatchedPlateRole,
 } from '@/lib/types'
-import type { TripForMatching } from '@/lib/integrations/fuel/matcher'
+import type { TripForMatching } from '@/lib/fuel/matcher'
 
 type DbFuelTransaction = {
   id: string
@@ -35,19 +35,14 @@ type DbFuelTransaction = {
   matched_plate_role: MatchedPlateRole | null
   match_status: FuelMatchStatus
   match_method: FuelMatchMethod | null
+  vehicle_id: string | null
+  driver_id: string | null
+  odometer_km: number | null
+  payment_method: FuelPaymentMethod | null
+  notes: string | null
   created_at: string
   trips?: { code: string } | null
-}
-
-type DbFuelImportBatch = {
-  id: string
-  provider: FuelProvider
-  file_name: string
-  row_count: number
-  linked_count: number
-  unlinked_count: number
-  skipped_duplicates: number
-  created_at: string
+  vehicles?: { plate: string; type: 'truck' | 'semi' | 'trailer' } | null
 }
 
 function mapFuelTransaction(row: DbFuelTransaction): FuelTransaction {
@@ -75,26 +70,20 @@ function mapFuelTransaction(row: DbFuelTransaction): FuelTransaction {
     matchedPlateRole: row.matched_plate_role ?? undefined,
     matchStatus: row.match_status,
     matchMethod: row.match_method ?? undefined,
-    createdAt: new Date(row.created_at),
-  }
-}
-
-function mapFuelImportBatch(row: DbFuelImportBatch): FuelImportBatch {
-  return {
-    id: row.id,
-    provider: row.provider,
-    fileName: row.file_name,
-    rowCount: row.row_count,
-    linkedCount: row.linked_count,
-    unlinkedCount: row.unlinked_count,
-    skippedDuplicates: row.skipped_duplicates,
+    vehicleId: row.vehicle_id ?? undefined,
+    vehicleType: row.vehicles?.type ?? undefined,
+    driverId: row.driver_id ?? undefined,
+    odometerKm: row.odometer_km != null ? Number(row.odometer_km) : undefined,
+    paymentMethod: row.payment_method ?? undefined,
+    notes: row.notes ?? undefined,
     createdAt: new Date(row.created_at),
   }
 }
 
 const fuelSelect = `
   *,
-  trips (code)
+  trips (code),
+  vehicles:vehicles!fuel_transactions_vehicle_id_fkey (plate, type)
 `
 
 export const getFuelTransactions = cache(async () => {
@@ -120,18 +109,6 @@ export const getFuelTransactionsByTripId = cache(async (tripId: string) => {
 
   if (error) throw new Error(error.message)
   return (data as DbFuelTransaction[]).map(mapFuelTransaction)
-})
-
-export const getFuelImportBatches = cache(async () => {
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('fuel_import_batches')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(20)
-
-  if (error) throw new Error(error.message)
-  return (data as DbFuelImportBatch[]).map(mapFuelImportBatch)
 })
 
 export async function getTripsForFuelMatching(): Promise<TripForMatching[]> {
@@ -167,21 +144,4 @@ export async function getTripsForFuelMatching(): Promise<TripForMatching[]> {
       trailerPlate: trailer?.plate,
     }
   })
-}
-
-export async function getExistingFuelExternalIds(
-  provider: FuelProvider,
-  externalIds: string[]
-): Promise<Set<string>> {
-  if (externalIds.length === 0) return new Set()
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from('fuel_transactions')
-    .select('external_id')
-    .eq('provider', provider)
-    .in('external_id', externalIds)
-    .is('deleted_at', null)
-
-  if (error) throw new Error(error.message)
-  return new Set((data ?? []).map((r) => r.external_id as string))
 }

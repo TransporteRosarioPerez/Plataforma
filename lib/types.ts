@@ -175,7 +175,8 @@ export interface TripExpense {
   expenseDate: Date
 }
 
-export type FuelProvider = 'ypf' | 'shell'
+export type FuelProvider = 'ypf' | 'shell' | 'manual'
+export type FuelPaymentMethod = 'cuenta_corriente' | 'contado' | 'tarjeta' | 'otro'
 export type FuelProductKind = 'diesel' | 'urea' | 'lubricant' | 'other'
 export type FuelMatchStatus = 'linked' | 'unlinked' | 'ambiguous'
 export type FuelMatchMethod = 'auto' | 'manual'
@@ -216,6 +217,12 @@ export interface FuelTransaction {
   matchedPlateRole?: MatchedPlateRole
   matchStatus: FuelMatchStatus
   matchMethod?: FuelMatchMethod
+  vehicleId?: string
+  vehicleType?: 'truck' | 'semi' | 'trailer'
+  driverId?: string
+  odometerKm?: number
+  paymentMethod?: FuelPaymentMethod
+  notes?: string
   createdAt: Date
 }
 

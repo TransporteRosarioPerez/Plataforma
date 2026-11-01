@@ -52,6 +52,7 @@ export const AUDIT_ACTIONS = {
   fuelImportConfirm: 'fuel.import.confirm',
   fuelLinkTrip: 'fuel.link_trip',
   fuelDelete: 'fuel.delete',
+  fuelUpsert: 'fuel.upsert',
 
   inventoryItemUpsert: 'inventory_item.upsert',
   inventoryItemDelete: 'inventory_item.delete',
@@ -151,6 +152,7 @@ export const auditActionLabels: Record<AuditAction, string> = {
   [AUDIT_ACTIONS.fuelImportConfirm]: 'Importación de combustible',
   [AUDIT_ACTIONS.fuelLinkTrip]: 'Combustible vinculado a viaje',
   [AUDIT_ACTIONS.fuelDelete]: 'Transacción de combustible eliminada',
+  [AUDIT_ACTIONS.fuelUpsert]: 'Carga de combustible registrada',
 
   [AUDIT_ACTIONS.inventoryItemUpsert]: 'Artículo de inventario',
   [AUDIT_ACTIONS.inventoryItemDelete]: 'Artículo eliminado',
