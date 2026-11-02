@@ -21,6 +21,7 @@ import {
   MapPin,
   ScrollText,
   Landmark,
+  KanbanSquare,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -86,6 +87,12 @@ const mainNavItems: NavItem[] = [
     title: 'Tesorería',
     href: '/app/tesoreria',
     icon: Landmark,
+    roles: ['superadmin'] as const,
+  },
+  {
+    title: 'CRM',
+    href: '/app/crm',
+    icon: KanbanSquare,
     roles: ['superadmin'] as const,
   },
   {

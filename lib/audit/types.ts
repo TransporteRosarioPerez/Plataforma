@@ -31,6 +31,10 @@ export type AuditEntityType =
   | 'treasury_cash_count'
   | 'treasury_forecast_item'
   | 'treasury_received_cheque'
+  | 'crm_quote'
+  | 'crm_company'
+  | 'crm_inbound_request'
+  | 'crm_rate'
 
 export type AuditLog = {
   id: string

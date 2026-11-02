@@ -13,7 +13,8 @@
     "apply:migrations": "tsx scripts/apply-migrations.ts",
     "docs:pdf": "node scripts/generate-demo-pdfs.mjs",
     "test:tesoreria": "tsx --test lib/tesoreria/__tests__/*.test.ts",
-    "test:combustible": "tsx --test lib/fuel/__tests__/*.test.ts"
+    "test:combustible": "tsx --test lib/fuel/__tests__/*.test.ts",
+    "test:crm": "tsx --test lib/crm/__tests__/*.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

@@ -12,6 +12,7 @@ export const SUPERADMIN_ONLY_ROUTES = [
   '/app/facturas',
   '/app/reportes',
   '/app/tesoreria',
+  '/app/crm',
   '/app/papelera',
   '/app/equipo',
   '/app/configuracion',

@@ -24,6 +24,8 @@ const ENTITY_LABELS: Record<RestorableEntity, string> = {
   treasury_received_cheque: 'Tesorería · Cheque recibido',
   treasury_cash_count: 'Tesorería · Arqueo',
   treasury_forecast_item: 'Tesorería · Proyección',
+  crm_quote: 'CRM · Cotización',
+  crm_company: 'CRM · Empresa',
 }
 
 export function getEntityTypeLabel(entity: RestorableEntity): string {

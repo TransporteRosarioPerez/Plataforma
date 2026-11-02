@@ -94,6 +94,16 @@ export const AUDIT_ACTIONS = {
   treasuryReceivedChequeUpsert: 'treasury.received_cheque.upsert',
   treasuryReceivedChequeSettle: 'treasury.received_cheque.settle',
   treasuryReceivedChequeDelete: 'treasury.received_cheque.delete',
+
+  crmRequestAccept: 'crm.request.accept',
+  crmRequestDiscard: 'crm.request.discard',
+  crmQuoteWon: 'crm.quote.won',
+  crmQuoteLost: 'crm.quote.lost',
+  crmQuoteDelete: 'crm.quote.delete',
+  crmCompanyUpsert: 'crm.company.upsert',
+  crmCompanyDelete: 'crm.company.delete',
+  crmCompanyMerge: 'crm.company.merge',
+  crmRateUpsert: 'crm.rate.upsert',
 } as const
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS]
@@ -194,6 +204,16 @@ export const auditActionLabels: Record<AuditAction, string> = {
   [AUDIT_ACTIONS.treasuryReceivedChequeUpsert]: 'Tesorería: cheque recibido',
   [AUDIT_ACTIONS.treasuryReceivedChequeSettle]: 'Tesorería: cheque recibido depositado/descontado',
   [AUDIT_ACTIONS.treasuryReceivedChequeDelete]: 'Tesorería: cheque recibido eliminado',
+
+  [AUDIT_ACTIONS.crmRequestAccept]: 'CRM: pedido pasado al board',
+  [AUDIT_ACTIONS.crmRequestDiscard]: 'CRM: pedido descartado',
+  [AUDIT_ACTIONS.crmQuoteWon]: 'CRM: cotización ganada',
+  [AUDIT_ACTIONS.crmQuoteLost]: 'CRM: cotización perdida',
+  [AUDIT_ACTIONS.crmQuoteDelete]: 'CRM: cotización eliminada',
+  [AUDIT_ACTIONS.crmCompanyUpsert]: 'CRM: empresa',
+  [AUDIT_ACTIONS.crmCompanyDelete]: 'CRM: empresa eliminada',
+  [AUDIT_ACTIONS.crmCompanyMerge]: 'CRM: empresas fusionadas',
+  [AUDIT_ACTIONS.crmRateUpsert]: 'CRM: tarifa',
 }
 
 export const auditActionOptions = Object.entries(auditActionLabels).map(([value, label]) => ({

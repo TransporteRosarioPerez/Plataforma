@@ -44,6 +44,8 @@ export type RestorableEntity =
   | 'treasury_received_cheque'
   | 'treasury_cash_count'
   | 'treasury_forecast_item'
+  | 'crm_quote'
+  | 'crm_company'
 
 const TABLE_BY_ENTITY: Record<RestorableEntity, string> = {
   client: 'clients',
@@ -69,6 +71,8 @@ const TABLE_BY_ENTITY: Record<RestorableEntity, string> = {
   treasury_received_cheque: 'treasury_received_cheques',
   treasury_cash_count: 'treasury_cash_counts',
   treasury_forecast_item: 'treasury_forecast_items',
+  crm_quote: 'crm_quotes',
+  crm_company: 'crm_companies',
 }
 
 function revalidateForEntity(entity: RestorableEntity, extra?: { tripId?: string; entityType?: string; entityId?: string; itemId?: string }) {
@@ -138,6 +142,10 @@ function revalidateForEntity(entity: RestorableEntity, extra?: { tripId?: string
     case 'treasury_cash_count':
     case 'treasury_forecast_item':
       revalidatePath('/app/tesoreria', 'layout')
+      break
+    case 'crm_quote':
+    case 'crm_company':
+      revalidatePath('/app/crm', 'layout')
       break
   }
 }

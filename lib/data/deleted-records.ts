@@ -33,6 +33,8 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
     treasuryReceivedRes,
     treasuryCashCountsRes,
     treasuryForecastRes,
+    crmQuotesRes,
+    crmCompaniesRes,
   ] = await Promise.all([
     supabase
       .from('clients')
@@ -151,6 +153,20 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
       .from('treasury_forecast_items')
       .select('id, name, amount, deleted_at')
       .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false }),
+    // CRM (vacío por RLS si no es superadmin)
+    supabase
+      .from('crm_quotes')
+      .select('id, number, deleted_at, company:crm_companies!crm_quotes_company_id_fkey(name)')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false })
+      .limit(500),
+    // Las empresas fusionadas no se recuperan (sus datos ya pasaron a la otra)
+    supabase
+      .from('crm_companies')
+      .select('id, name, deleted_at')
+      .not('deleted_at', 'is', null)
+      .is('merged_into_id', null)
       .order('deleted_at', { ascending: false }),
   ])
 
@@ -369,6 +385,20 @@ export const getDeletedRecords = cache(async (): Promise<DeletedRecordRow[]> => 
       label: `${row.name} · ${money.format(Number(row.amount))}`,
       deletedAt: new Date(row.deleted_at as string),
     })
+  }
+
+  for (const row of crmQuotesRes.data ?? []) {
+    const company = Array.isArray(row.company) ? row.company[0]?.name : (row.company as { name?: string } | null)?.name
+    rows.push({
+      id: row.id,
+      entity: 'crm_quote',
+      label: `COT-${String(row.number).padStart(4, '0')} · ${company ?? '—'}`,
+      deletedAt: new Date(row.deleted_at as string),
+    })
+  }
+
+  for (const row of crmCompaniesRes.data ?? []) {
+    rows.push({ id: row.id, entity: 'crm_company', label: row.name, deletedAt: new Date(row.deleted_at as string) })
   }
 
   return rows.sort((a, b) => b.deletedAt.getTime() - a.deletedAt.getTime())
