@@ -16,7 +16,7 @@ export function AppShell({ children, profile, notifications }: AppShellProps) {
   return (
     <SidebarProvider>
       <AppSidebar userRole={profile.role} />
-      <SidebarInset>
+      <SidebarInset className="min-w-0">
         <AppHeader profile={profile} notifications={notifications} />
         <main className="flex-1 overflow-auto p-6">{children}</main>
       </SidebarInset>

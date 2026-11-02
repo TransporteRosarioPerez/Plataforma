@@ -133,7 +133,7 @@ export function BoardView({ quotes: initial }: { quotes: CrmQuote[] }) {
           <Link href="/app/crm/bandeja" className="text-primary hover:underline">Bandeja de entrada</Link>.
         </div>
       ) : (
-        <div className="-mx-6 overflow-x-auto px-6 pb-2">
+        <div className="-mx-6 overflow-x-auto overscroll-x-contain px-6 pb-2 contain-inline-size">
           <div className="flex min-w-max gap-3">
             {STAGES.map((stage) => {
               const list = byStage.get(stage)!
