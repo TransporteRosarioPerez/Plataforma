@@ -16,32 +16,116 @@ import {
 } from '@/lib/proformas/trip-billing-sync'
 import { calculateInvoiceAmounts } from '@/lib/invoices/calculate'
 
-function normalizeLineItems(raw: { trip_id: string; amount: number; taxes?: number }[]) {
-  return raw.map((item) => ({
-    trip_id: item.trip_id,
-    amount: item.amount,
-    taxes: 0,
-  }))
+type ParsedLineItem = {
+  trip_id: string
+  amount: number
+  taxes: number
+  is_adjustment: boolean
+  adjustment_reason: string | null
 }
 
-function parseLineItems(raw: string): { trip_id: string; amount: number; taxes: number }[] {
+function parseLineItems(raw: string): ParsedLineItem[] {
   try {
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
-    return normalizeLineItems(
-      parsed
-        .map((item) => {
-          const row = item as Record<string, unknown>
-          return {
-            trip_id: String(row.trip_id ?? ''),
-            amount: Number(row.amount ?? 0),
-            taxes: Number(row.taxes ?? 0),
-          }
-        })
-        .filter((item) => item.trip_id)
-    )
+    return parsed
+      .map((item) => {
+        const row = item as Record<string, unknown>
+        const isAdjustment = row.is_adjustment === true
+        const reason = typeof row.adjustment_reason === 'string' ? row.adjustment_reason.trim() : ''
+        return {
+          trip_id: String(row.trip_id ?? ''),
+          amount: Math.round(Number(row.amount ?? 0) * 100) / 100,
+          taxes: 0,
+          is_adjustment: isAdjustment,
+          adjustment_reason: isAdjustment && reason ? reason : null,
+        }
+      })
+      .filter((item) => item.trip_id && Number.isFinite(item.amount))
   } catch {
     return []
+  }
+}
+
+function validateLineAmounts(lineItems: ParsedLineItem[]): ActionState | null {
+  if (lineItems.some((item) => !item.is_adjustment && item.amount <= 0)) {
+    return { error: 'Cada viaje debe tener un importe mayor a 0 en la proforma' }
+  }
+  if (lineItems.some((item) => item.is_adjustment && item.amount === 0)) {
+    return { error: 'Cada ajuste de viaje debe tener una diferencia distinta de 0' }
+  }
+  const subtotal = lineItems.reduce((sum, item) => sum + item.amount, 0)
+  if (subtotal <= 0) {
+    return { error: 'El neto de la proforma tiene que ser mayor a 0' }
+  }
+  return null
+}
+
+function lineItemRows(proformaId: string, lineItems: ParsedLineItem[]) {
+  return lineItems.map((item) => ({
+    proforma_id: proformaId,
+    trip_id: item.trip_id,
+    amount: item.amount,
+    taxes: 0,
+    is_adjustment: item.is_adjustment,
+    adjustment_reason: item.adjustment_reason,
+  }))
+}
+
+/**
+ * Un ajuste solo tiene sentido sobre un viaje que ya está en otra proforma
+ * activa (facturado o cobrado). Así el ingreso del viaje queda como la suma
+ * del importe original + el ajuste.
+ */
+async function validateAdjustmentTrips(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  tripIds: string[],
+  excludeProformaId?: string
+): Promise<ActionState | null> {
+  if (tripIds.length === 0) return null
+
+  const assigned = await getAssignedTripIds(supabase, excludeProformaId)
+  const missing = tripIds.filter((id) => !assigned.has(id))
+  if (missing.length === 0) return null
+
+  const { data: trips } = await supabase.from('trips').select('code').in('id', missing)
+  const codes = (trips ?? []).map((t) => t.code).join(', ')
+  return {
+    error: `Solo se puede ajustar un viaje que ya está en otra proforma${codes ? ` (${codes} no lo está)` : ''}. Agregalo con “Elegir viajes”.`,
+  }
+}
+
+async function logTripAdjustments(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  proformaNumber: string,
+  adjustments: ParsedLineItem[]
+) {
+  if (adjustments.length === 0) return
+  const { data: trips } = await supabase
+    .from('trips')
+    .select('id, code')
+    .in(
+      'id',
+      adjustments.map((a) => a.trip_id)
+    )
+  const codeById = new Map((trips ?? []).map((t) => [t.id as string, t.code as string]))
+  const fmt = (n: number) =>
+    new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 }).format(n)
+
+  for (const adj of adjustments) {
+    const code = codeById.get(adj.trip_id) ?? adj.trip_id
+    await logAudit({
+      action: AUDIT_ACTIONS.tripAdjustment,
+      entityType: 'trip',
+      entityId: adj.trip_id,
+      entityLabel: code,
+      summary: `Ajuste de ${adj.amount > 0 ? '+' : ''}${fmt(adj.amount)} al viaje ${code} en la proforma ${proformaNumber}${adj.adjustment_reason ? ` (${adj.adjustment_reason})` : ''}`,
+      metadata: {
+        proformaNumber,
+        amount: adj.amount,
+        reason: adj.adjustment_reason,
+      },
+    })
   }
 }
 
@@ -72,7 +156,7 @@ async function validateTripsForProforma(
   tripIds: string[],
   excludeProformaId?: string
 ): Promise<ActionState | null> {
-  if (tripIds.length === 0) return { error: 'Seleccioná al menos un viaje' }
+  if (tripIds.length === 0) return null
 
   const assigned = await getAssignedTripIds(supabase, excludeProformaId)
 
@@ -141,12 +225,25 @@ export async function createProforma(
 
   if (clientError || !client) return { error: 'Cliente no encontrado' }
 
-  const validationError = await validateTripsForProforma(supabase, tripIds)
+  if (lineItems.length === 0) return { error: 'Seleccioná al menos un viaje' }
+  if (new Set(tripIds).size !== tripIds.length) {
+    return { error: 'Un viaje no puede estar dos veces en la misma proforma' }
+  }
+
+  const amountsError = validateLineAmounts(lineItems)
+  if (amountsError) return amountsError
+
+  const adjustments = lineItems.filter((item) => item.is_adjustment)
+  const regularTripIds = lineItems.filter((item) => !item.is_adjustment).map((item) => item.trip_id)
+
+  const validationError = await validateTripsForProforma(supabase, regularTripIds)
   if (validationError) return validationError
 
-  if (lineItems.some((item) => item.amount <= 0)) {
-    return { error: 'Cada viaje debe tener un importe mayor a 0 en la proforma' }
-  }
+  const adjustmentError = await validateAdjustmentTrips(
+    supabase,
+    adjustments.map((item) => item.trip_id)
+  )
+  if (adjustmentError) return adjustmentError
 
   const totals = sumLineItems(lineItems)
   const total = totals.subtotal
@@ -172,14 +269,9 @@ export async function createProforma(
 
   if (error || !proforma) return { error: error?.message ?? 'Error al crear proforma' }
 
-  const { error: linesError } = await supabase.from('proforma_line_items').insert(
-    lineItems.map((item) => ({
-      proforma_id: proforma.id,
-      trip_id: item.trip_id,
-      amount: item.amount,
-      taxes: item.taxes,
-    }))
-  )
+  const { error: linesError } = await supabase
+    .from('proforma_line_items')
+    .insert(lineItemRows(proforma.id, lineItems))
 
   if (linesError) {
     await supabase.from('proformas').update(softDeleteUpdate()).eq('id', proforma.id)
@@ -193,9 +285,18 @@ export async function createProforma(
     entityType: 'proforma',
     entityId: proforma.id,
     entityLabel: parsed.data.proforma_number,
-    summary: `Creó la proforma ${parsed.data.proforma_number} con ${tripIds.length} viaje(s)`,
-    metadata: { tripCount: tripIds.length, clientName: client.name },
+    summary:
+      adjustments.length > 0
+        ? `Creó la proforma ${parsed.data.proforma_number} con ${tripIds.length} viaje(s), ${adjustments.length} de ajuste`
+        : `Creó la proforma ${parsed.data.proforma_number} con ${tripIds.length} viaje(s)`,
+    metadata: {
+      tripCount: tripIds.length,
+      adjustmentCount: adjustments.length,
+      clientName: client.name,
+    },
   })
+
+  await logTripAdjustments(supabase, parsed.data.proforma_number, adjustments)
 
   revalidatePath('/app/proformas')
   revalidatePath('/app/viajes')
@@ -204,7 +305,12 @@ export async function createProforma(
     revalidatePath(`/app/viajes/${tripId}`)
   }
 
-  return { success: `Proforma creada con ${tripIds.length} viaje(s)` }
+  return {
+    success:
+      adjustments.length > 0
+        ? `Proforma creada con ${tripIds.length} viaje(s) (${adjustments.length} ajuste${adjustments.length === 1 ? '' : 's'})`
+        : `Proforma creada con ${tripIds.length} viaje(s)`,
+  }
 }
 
 export async function updateProforma(
@@ -230,6 +336,7 @@ export async function updateProforma(
   let subtotal = parsed.data.subtotal
   let syncedInvoice = false
   let nextTripIds = previousTripIds
+  let newAdjustments: ParsedLineItem[] = []
 
   if (parsed.data.line_items != null && parsed.data.line_items !== '') {
     const lineItems = parseLineItems(parsed.data.line_items)
@@ -237,24 +344,56 @@ export async function updateProforma(
       return { error: 'La proforma debe tener al menos un viaje con importe' }
     }
 
-    if (lineItems.some((item) => item.amount <= 0)) {
-      return { error: 'Cada viaje debe tener un importe mayor a 0 en la proforma' }
-    }
+    const amountsError = validateLineAmounts(lineItems)
+    if (amountsError) return amountsError
 
     nextTripIds = lineItems.map((item) => item.trip_id)
+    if (new Set(nextTripIds).size !== nextTripIds.length) {
+      return { error: 'Un viaje no puede estar dos veces en la misma proforma' }
+    }
     const previousSet = new Set(previousTripIds)
     const nextSet = new Set(nextTripIds)
     const addedTripIds = nextTripIds.filter((id) => !previousSet.has(id))
     const removedTripIds = previousTripIds.filter((id) => !nextSet.has(id))
 
+    const adjustmentTripIds = new Set(
+      lineItems.filter((item) => item.is_adjustment).map((item) => item.trip_id)
+    )
+
     if (addedTripIds.length > 0) {
       const validationError = await validateTripsForProforma(
         supabase,
-        addedTripIds,
+        addedTripIds.filter((id) => !adjustmentTripIds.has(id)),
         parsed.data.id
       )
       if (validationError) return validationError
     }
+
+    const adjustmentError = await validateAdjustmentTrips(
+      supabase,
+      Array.from(adjustmentTripIds),
+      parsed.data.id
+    )
+    if (adjustmentError) return adjustmentError
+
+    // Para el registro en el viaje: ajustes nuevos o con importe/motivo cambiado
+    const { data: previousLines } = await supabase
+      .from('proforma_line_items')
+      .select('trip_id, amount, is_adjustment, adjustment_reason')
+      .eq('proforma_id', parsed.data.id)
+    const previousByTrip = new Map(
+      (previousLines ?? []).map((row) => [row.trip_id as string, row])
+    )
+    newAdjustments = lineItems.filter((item) => {
+      if (!item.is_adjustment) return false
+      const prev = previousByTrip.get(item.trip_id)
+      return (
+        !prev ||
+        prev.is_adjustment !== true ||
+        Number(prev.amount) !== item.amount ||
+        (prev.adjustment_reason ?? null) !== item.adjustment_reason
+      )
+    })
 
     subtotal = sumLineItems(lineItems).subtotal
 
@@ -265,14 +404,9 @@ export async function updateProforma(
 
     if (deleteLinesError) return { error: deleteLinesError.message }
 
-    const { error: insertLinesError } = await supabase.from('proforma_line_items').insert(
-      lineItems.map((item) => ({
-        proforma_id: parsed.data.id,
-        trip_id: item.trip_id,
-        amount: item.amount,
-        taxes: 0,
-      }))
-    )
+    const { error: insertLinesError } = await supabase
+      .from('proforma_line_items')
+      .insert(lineItemRows(parsed.data.id, lineItems))
 
     if (insertLinesError) return { error: insertLinesError.message }
 
@@ -333,6 +467,8 @@ export async function updateProforma(
       ? `Actualizó la proforma ${parsed.data.proforma_number} y recalculó la factura vinculada`
       : `Actualizó la proforma ${parsed.data.proforma_number}`,
   })
+
+  await logTripAdjustments(supabase, parsed.data.proforma_number, newAdjustments)
 
   const revalidateTripIds = Array.from(new Set([...previousTripIds, ...nextTripIds]))
 

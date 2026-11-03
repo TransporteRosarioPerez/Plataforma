@@ -16,6 +16,7 @@ import { CreateProformaSheet } from '@/components/proformas/create-proforma-shee
 import { EditProformaSheet } from '@/components/proformas/edit-proforma-sheet'
 import { deleteProforma } from '@/lib/actions/proformas'
 import { OPERATIONAL_TRIP_STATUSES, type Proforma, Client, Trip, Invoice } from '@/lib/types'
+import type { TripBillingHistoryEntry } from '@/lib/proformas/trip-estimate-amount'
 import { toast } from 'sonner'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -58,6 +59,33 @@ function getAssignedTripIds(proformas: Proforma[], excludeProformaId?: string): 
     }
   }
   return ids
+}
+
+/** Líneas de cada viaje en las proformas activas (menos la excluida). */
+function buildTripBillingHistory(
+  proformas: Proforma[],
+  excludeProformaId?: string
+): Record<string, TripBillingHistoryEntry[]> {
+  const history: Record<string, TripBillingHistoryEntry[]> = {}
+  for (const p of proformas) {
+    if (excludeProformaId && p.id === excludeProformaId) continue
+    for (const line of p.lineItems) {
+      const list = history[line.tripId] ?? (history[line.tripId] = [])
+      list.push({
+        proformaId: p.id,
+        proformaNumber: p.proformaNumber,
+        proformaStatus: p.status,
+        receivedDate: p.receivedDate,
+        amount: line.amount,
+        isAdjustment: line.isAdjustment,
+        adjustmentReason: line.adjustmentReason,
+      })
+    }
+  }
+  for (const list of Object.values(history)) {
+    list.sort((a, b) => a.receivedDate.getTime() - b.receivedDate.getTime())
+  }
+  return history
 }
 
 type ProformasViewProps = {
@@ -121,8 +149,28 @@ export function ProformasView({
   const editSharedTripIds = useMemo(() => {
     if (!editing) return [] as string[]
     const assignedElsewhere = getAssignedTripIds(proformas, editing.id)
-    return editing.tripIds.filter((id) => assignedElsewhere.has(id))
+    const adjustmentIds = new Set(
+      editing.lineItems.filter((l) => l.isAdjustment).map((l) => l.tripId)
+    )
+    return editing.tripIds.filter((id) => assignedElsewhere.has(id) && !adjustmentIds.has(id))
   }, [editing, proformas])
+
+  // Ajuste de viaje: viajes que ya están en otra proforma activa (facturados / cobrados)
+  const adjustableTrips = useMemo(
+    () => trips.filter((t) => assignedTripIds.has(t.id)),
+    [trips, assignedTripIds]
+  )
+  const tripBillingHistory = useMemo(() => buildTripBillingHistory(proformas), [proformas])
+
+  const editAdjustableTrips = useMemo(() => {
+    if (!editing) return adjustableTrips
+    const assignedElsewhere = getAssignedTripIds(proformas, editing.id)
+    return trips.filter((t) => assignedElsewhere.has(t.id))
+  }, [adjustableTrips, editing, proformas, trips])
+  const editTripBillingHistory = useMemo(
+    () => (editing ? buildTripBillingHistory(proformas, editing.id) : tripBillingHistory),
+    [editing, proformas, tripBillingHistory]
+  )
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
@@ -234,7 +282,19 @@ export function ProformasView({
                       className="cursor-pointer"
                       onClick={() => openEdit(p)}
                     >
-                      <TableCell className="font-mono font-medium">{p.proformaNumber}</TableCell>
+                      <TableCell className="font-mono font-medium">
+                        <span className="inline-flex items-center gap-2">
+                          {p.proformaNumber}
+                          {p.lineItems.some((l) => l.isAdjustment) && (
+                            <Badge
+                              variant="outline"
+                              className="font-sans text-[10px] border-amber-500/40 text-amber-800 bg-amber-500/10"
+                            >
+                              Ajuste
+                            </Badge>
+                          )}
+                        </span>
+                      </TableCell>
                       <TableCell>{p.clientName}</TableCell>
                       <TableCell className="whitespace-nowrap">
                         {dateFormatter.format(p.receivedDate)}
@@ -295,6 +355,8 @@ export function ProformasView({
         onOpenChange={setCreateOpen}
         clients={clients}
         billableTrips={billableTrips}
+        adjustableTrips={adjustableTrips}
+        tripBillingHistory={tripBillingHistory}
         allTrips={trips}
       />
 
@@ -304,6 +366,8 @@ export function ProformasView({
         proforma={editing}
         invoice={editing ? invoicesByProformaId[editing.id] ?? null : null}
         billableTrips={editBillableTrips}
+        adjustableTrips={editAdjustableTrips}
+        tripBillingHistory={editTripBillingHistory}
         allTrips={trips}
         initiallySharedTripIds={editSharedTripIds}
         onRequestDelete={(p) => {

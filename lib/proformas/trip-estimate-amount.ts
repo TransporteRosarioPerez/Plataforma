@@ -1,7 +1,33 @@
 import type { Trip } from '@/lib/types'
 import { formatGroupedNumber, parseGroupedNumber } from '@/lib/format/numbers'
 
-export type TripLineValues = { amount: string; taxes: string; fromEstimate?: boolean }
+export type AdjustmentDirection = 'up' | 'down'
+
+export type TripLineAdjustment = {
+  /** up = se cobra de más (suma), down = se descuenta (resta). */
+  direction: AdjustmentDirection
+  reason: string
+}
+
+export type TripLineValues = {
+  /** Importe en formato es-AR. En ajustes es el valor absoluto de la diferencia. */
+  amount: string
+  taxes: string
+  fromEstimate?: boolean
+  /** Presente solo si la línea es un ajuste sobre un viaje ya facturado/cobrado. */
+  adjustment?: TripLineAdjustment
+}
+
+/** Una línea anterior del viaje en otra proforma (para mostrar el historial). */
+export type TripBillingHistoryEntry = {
+  proformaId: string
+  proformaNumber: string
+  proformaStatus: 'pendiente' | 'facturada' | 'cobrada'
+  receivedDate: Date
+  amount: number
+  isAdjustment: boolean
+  adjustmentReason?: string
+}
 
 export function getTripEstimatedAmount(trip: Trip): number | null {
   if (trip.unitPrice == null || trip.totalPallets == null) return null
@@ -21,6 +47,42 @@ export function formatTripLineAmount(amount: number | undefined): string {
 
 export function parseTripLineAmount(amount: string): number {
   return parseGroupedNumber(amount) ?? 0
+}
+
+/** Importe con signo (los ajustes a la baja restan). */
+export function signedTripLineAmount(line: TripLineValues | undefined): number {
+  if (!line) return 0
+  const value = Math.abs(parseTripLineAmount(line.amount))
+  return line.adjustment?.direction === 'down' ? -value : value
+}
+
+export function buildAdjustmentLine(): TripLineValues {
+  return { amount: '', taxes: '0', adjustment: { direction: 'up', reason: '' } }
+}
+
+/** JSON de líneas que esperan createProforma / updateProforma. */
+export function buildLineItemsJson(
+  tripIds: string[],
+  lines: Record<string, TripLineValues>
+): string {
+  return JSON.stringify(
+    tripIds.map((id) => {
+      const line = lines[id]
+      return {
+        trip_id: id,
+        amount: signedTripLineAmount(line),
+        taxes: 0,
+        is_adjustment: !!line?.adjustment,
+        adjustment_reason: line?.adjustment?.reason.trim() || null,
+      }
+    })
+  )
+}
+
+export function sumTripLines(tripIds: string[], lines: Record<string, TripLineValues>): number {
+  return (
+    Math.round(tripIds.reduce((sum, id) => sum + signedTripLineAmount(lines[id]), 0) * 100) / 100
+  )
 }
 
 export function buildTripLineFromEstimate(trip: Trip): TripLineValues {

@@ -113,16 +113,20 @@ export type DbProformaLineItem = {
   trip_id: string
   amount: number
   taxes: number
+  is_adjustment?: boolean | null
+  adjustment_reason?: string | null
   created_at: string
 }
 
-export function mapProformaLineItem(row: DbProformaLineItem) {
+export function mapProformaLineItem(row: DbProformaLineItem): ProformaLineItem {
   return {
     id: row.id,
     proformaId: row.proforma_id,
     tripId: row.trip_id,
     amount: Number(row.amount),
     taxes: Number(row.taxes),
+    isAdjustment: row.is_adjustment === true,
+    adjustmentReason: row.adjustment_reason ?? undefined,
   }
 }
 

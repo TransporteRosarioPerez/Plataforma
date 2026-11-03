@@ -16,6 +16,7 @@ export const AUDIT_ACTIONS = {
   tripDocumentAdd: 'trip_document.add',
   tripDocumentDelete: 'trip_document.delete',
   tripBillingUpdate: 'trip_billing.update',
+  tripAdjustment: 'trip.adjustment',
   tripExpenseUpsert: 'trip_expense.upsert',
   tripExpenseDelete: 'trip_expense.delete',
 
@@ -132,6 +133,7 @@ export const auditActionLabels: Record<AuditAction, string> = {
   [AUDIT_ACTIONS.tripDocumentAdd]: 'Documento de viaje',
   [AUDIT_ACTIONS.tripDocumentDelete]: 'Documento de viaje eliminado',
   [AUDIT_ACTIONS.tripBillingUpdate]: 'Facturación de viaje',
+  [AUDIT_ACTIONS.tripAdjustment]: 'Ajuste de viaje',
   [AUDIT_ACTIONS.tripExpenseUpsert]: 'Gasto de viaje',
   [AUDIT_ACTIONS.tripExpenseDelete]: 'Gasto de viaje eliminado',
 

@@ -12,14 +12,19 @@ import { Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { AddTripsDialog } from '@/components/proformas/add-trips-dialog'
 import { AddSharedTripDialog } from '@/components/proformas/add-shared-trip-dialog'
+import { AddAdjustmentTripsDialog } from '@/components/proformas/add-adjustment-trips-dialog'
 import { SelectedTripsEditor } from '@/components/proformas/selected-trips-editor'
 import { updateProforma } from '@/lib/actions/proformas'
 import type { SharedTripLookup } from '@/lib/actions/proformas'
 import { generateProformaDownloadUrl, generateProformaUploadUrl } from '@/lib/actions/proforma-file'
 import {
+  buildAdjustmentLine,
+  buildLineItemsJson,
   buildTripLineFromEstimate,
   formatTripLineAmount,
-  parseTripLineAmount,
+  sumTripLines,
+  type TripBillingHistoryEntry,
+  type TripLineAdjustment,
   type TripLineValues,
 } from '@/lib/proformas/trip-estimate-amount'
 import { calculateInvoiceAmounts } from '@/lib/invoices/calculate'
@@ -55,6 +60,8 @@ type EditProformaSheetProps = {
   proforma: Proforma | null
   invoice: Invoice | null
   billableTrips: Trip[]
+  adjustableTrips: Trip[]
+  tripBillingHistory: Record<string, TripBillingHistoryEntry[]>
   allTrips: Trip[]
   initiallySharedTripIds?: string[]
   onRequestDelete: (proforma: Proforma) => void
@@ -65,10 +72,19 @@ function buildTripLinesState(proforma: Proforma): Record<string, TripLineValues>
   const next: Record<string, TripLineValues> = {}
   if (proforma.lineItems.length > 0) {
     for (const line of proforma.lineItems) {
-      next[line.tripId] = {
-        amount: formatTripLineAmount(line.amount),
-        taxes: '0',
-      }
+      next[line.tripId] = line.isAdjustment
+        ? {
+            amount: formatTripLineAmount(Math.abs(line.amount)),
+            taxes: '0',
+            adjustment: {
+              direction: line.amount < 0 ? 'down' : 'up',
+              reason: line.adjustmentReason ?? '',
+            },
+          }
+        : {
+            amount: formatTripLineAmount(line.amount),
+            taxes: '0',
+          }
     }
     return next
   }
@@ -84,6 +100,8 @@ export function EditProformaSheet({
   proforma,
   invoice,
   billableTrips,
+  adjustableTrips,
+  tripBillingHistory,
   allTrips,
   initiallySharedTripIds = [],
   onRequestDelete,
@@ -97,6 +115,7 @@ export function EditProformaSheet({
   const [sharedTripIds, setSharedTripIds] = useState<Set<string>>(() => new Set())
   const [addTripsOpen, setAddTripsOpen] = useState(false)
   const [addSharedOpen, setAddSharedOpen] = useState(false)
+  const [addAdjustmentOpen, setAddAdjustmentOpen] = useState(false)
   const [updateState, updateAction, updatePending] = useActionState(updateProforma, initialState)
 
   useEffect(() => {
@@ -110,6 +129,7 @@ export function EditProformaSheet({
       setSharedTripIds(new Set(initiallySharedTripIds))
       setAddTripsOpen(false)
       setAddSharedOpen(false)
+      setAddAdjustmentOpen(false)
     }
   }, [open, proforma, initiallySharedTripIds])
 
@@ -123,22 +143,12 @@ export function EditProformaSheet({
   }, [updateState, onOpenChange, router])
 
   const subtotal = useMemo(
-    () =>
-      Math.round(
-        selectedTripIds.reduce((sum, id) => sum + parseTripLineAmount(tripLines[id]?.amount ?? ''), 0) * 100
-      ) / 100,
+    () => sumTripLines(selectedTripIds, tripLines),
     [selectedTripIds, tripLines]
   )
 
   const lineItemsJson = useMemo(
-    () =>
-      JSON.stringify(
-        selectedTripIds.map((id) => ({
-          trip_id: id,
-          amount: parseTripLineAmount(tripLines[id]?.amount ?? ''),
-          taxes: 0,
-        }))
-      ),
+    () => buildLineItemsJson(selectedTripIds, tripLines),
     [selectedTripIds, tripLines]
   )
 
@@ -153,6 +163,8 @@ export function EditProformaSheet({
     const seen = new Set<string>()
 
     for (const id of selectedTripIds) {
+      // Los ajustes se manejan aparte (no son viajes “libres” para elegir)
+      if (tripLines[id]?.adjustment) continue
       const trip = byId.get(id)
       if (trip && !seen.has(id)) {
         result.push(trip)
@@ -168,7 +180,7 @@ export function EditProformaSheet({
     }
 
     return result
-  }, [allTrips, billableTrips, selectedTripIds])
+  }, [allTrips, billableTrips, selectedTripIds, tripLines])
 
   const getTrip = (tripId: string) => allTrips.find((trip) => trip.id === tripId)
 
@@ -190,6 +202,7 @@ export function EditProformaSheet({
     setTripLines((lines) => ({
       ...lines,
       [tripId]: {
+        ...lines[tripId],
         amount: value,
         taxes: '0',
         fromEstimate: false,
@@ -197,7 +210,29 @@ export function EditProformaSheet({
     }))
   }
 
-  const confirmTripSelection = (tripIds: string[]) => {
+  const updateAdjustment = (tripId: string, patch: Partial<TripLineAdjustment>) => {
+    setTripLines((lines) => {
+      const current = lines[tripId]
+      if (!current?.adjustment) return lines
+      return { ...lines, [tripId]: { ...current, adjustment: { ...current.adjustment, ...patch } } }
+    })
+  }
+
+  const confirmAdjustmentTrips = (tripIds: string[]) => {
+    setSelectedTripIds((prev) => [...prev, ...tripIds.filter((id) => !prev.includes(id))])
+    setTripLines((lines) => {
+      const next = { ...lines }
+      for (const id of tripIds) {
+        if (!next[id]) next[id] = buildAdjustmentLine()
+      }
+      return next
+    })
+  }
+
+  const confirmTripSelection = (pickedTripIds: string[]) => {
+    // “Elegir viajes” no toca las líneas de ajuste: se conservan siempre
+    const adjustmentIds = selectedTripIds.filter((id) => tripLines[id]?.adjustment)
+    const tripIds = [...pickedTripIds, ...adjustmentIds.filter((id) => !pickedTripIds.includes(id))]
     setSelectedTripIds(tripIds)
     setTripLines((lines) => {
       const next = { ...lines }
@@ -482,12 +517,16 @@ export function EditProformaSheet({
                 onUpdateLine={updateTripLine}
                 onAddTrips={() => setAddTripsOpen(true)}
                 onAddSharedTrip={() => setAddSharedOpen(true)}
+                onAddAdjustment={() => setAddAdjustmentOpen(true)}
+                onUpdateAdjustment={updateAdjustment}
+                billingHistory={tripBillingHistory}
                 disabled={updatePending}
               />
               <p className="text-xs text-muted-foreground mt-1.5">
                 Podés agregar, quitar o ajustar importes. El neto se recalcula solo
                 {invoice ? ' y también el de la factura vinculada (IVA 21%)' : ''}. Usá “Viaje
-                compartido” solo si el mismo viaje se factura a otro cliente.
+                compartido” solo si el mismo viaje se factura a otro cliente, y “Ajuste de viaje” para
+                diferencias sobre viajes ya cobrados.
               </p>
             </Field>
 
@@ -519,6 +558,15 @@ export function EditProformaSheet({
         excludeProformaId={proforma?.id}
         excludeTripIds={selectedTripIds}
         onConfirm={confirmSharedTrip}
+      />
+
+      <AddAdjustmentTripsDialog
+        open={addAdjustmentOpen}
+        onOpenChange={setAddAdjustmentOpen}
+        trips={adjustableTrips}
+        excludeTripIds={selectedTripIds}
+        history={tripBillingHistory}
+        onConfirm={confirmAdjustmentTrips}
       />
     </>
   )

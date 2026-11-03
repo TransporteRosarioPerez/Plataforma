@@ -320,6 +320,22 @@ flowchart TD
 6. Cuando facturás al cliente → **Facturada**
 7. Cuando el pago entra → **Cobrada** (esto cierra el ciclo económico)
 
+### Ajuste de viaje (viajes ya cobrados)
+
+A veces el cliente ajusta un viaje meses después (actualización de tarifa, diferencia de pallets, descuento). El viaje ya está **Pagado**, así que no aparece en “Elegir viajes”. Para eso está el botón **Ajuste de viaje** dentro de la proforma:
+
+1. En la proforma que trae el ajuste (nueva o existente) → **Ajuste de viaje**
+2. Elegir el/los viajes (por defecto muestra los **Pagados**; se puede buscar por nº de viaje o nº de proforma)
+3. En cada uno: **Suma** o **Resta**, la **diferencia neta** (no el total del viaje) y el **motivo**
+4. Guardar
+
+Qué pasa con el viaje:
+
+- El ingreso del viaje pasa a ser **importe original + ajustes** (y se recalcula la ganancia)
+- Vuelve a **Pendiente de pago** hasta que la proforma del ajuste quede **Cobrada**; después vuelve a **Pagado**
+- En la ficha del viaje → Cobranza aparece el bloque **Viaje ajustado** con el detalle (original, cada ajuste con fecha/proforma/motivo y total) y queda registrado en la auditoría
+- En el listado de proformas, las que tienen ajustes llevan la etiqueta **Ajuste**
+
 ### Facturas (invoices)
 
 La tabla de facturas existe y se muestra en la ficha del viaje, pero **hoy no hay emisión AFIP desde la app**. La operatoria de cobro se canaliza por **proformas**.

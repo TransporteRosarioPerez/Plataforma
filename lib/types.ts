@@ -299,8 +299,12 @@ export interface ProformaLineItem {
   id: string
   proformaId: string
   tripId: string
+  /** Importe neto de la línea. En ajustes puede ser negativo (baja de tarifa). */
   amount: number
   taxes: number
+  /** true = ajuste sobre un viaje ya facturado/cobrado en otra proforma. */
+  isAdjustment: boolean
+  adjustmentReason?: string
 }
 
 export interface Proforma {

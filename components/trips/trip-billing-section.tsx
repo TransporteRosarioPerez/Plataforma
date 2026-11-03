@@ -13,6 +13,12 @@ import type { Trip, Proforma, Invoice } from '@/lib/types'
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
 
+const dateFormatter = new Intl.DateTimeFormat('es-AR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+})
+
 const proformaStatusLabels: Record<Proforma['status'], string> = {
   pendiente: 'Pendiente',
   facturada: 'Facturada',
@@ -40,6 +46,21 @@ export function TripBillingSection({
 }: TripBillingSectionProps) {
   const isBillingStatus = trip.status === 'pending_payment' || trip.status === 'paid'
   const hasIncome = trip.totalIncome > 0
+
+  // Línea de este viaje en cada proforma (importe original o ajuste)
+  const tripLines = proformas
+    .map((p) => {
+      const line = p.lineItems.find((l) => l.tripId === trip.id)
+      return line ? { proforma: p, line } : null
+    })
+    .filter((x): x is { proforma: Proforma; line: Proforma['lineItems'][number] } => !!x)
+    .sort((a, b) => a.proforma.receivedDate.getTime() - b.proforma.receivedDate.getTime())
+  const lineByProformaId = new Map(tripLines.map((x) => [x.proforma.id, x.line]))
+  const adjustments = tripLines.filter((x) => x.line.isAdjustment)
+  const originalIncome = tripLines
+    .filter((x) => !x.line.isAdjustment)
+    .reduce((sum, x) => sum + x.line.amount, 0)
+  const adjustmentsTotal = adjustments.reduce((sum, x) => sum + x.line.amount, 0)
 
   return (
     <div className="space-y-4">
@@ -80,6 +101,39 @@ export function TripBillingSection({
                   {formatCurrency(trip.totalExpenses)}
                 </p>
               </div>
+            </div>
+          )}
+
+          {adjustments.length > 0 && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-3 space-y-2 text-sm">
+              <p className="font-medium">
+                Viaje ajustado ({adjustments.length} ajuste{adjustments.length === 1 ? '' : 's'})
+              </p>
+              <ul className="space-y-1 text-xs">
+                <li className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">Importe original</span>
+                  <span className="tabular-nums">{formatCurrency(originalIncome)}</span>
+                </li>
+                {adjustments.map(({ proforma, line }) => (
+                  <li key={proforma.id} className="flex justify-between gap-2">
+                    <span className="text-muted-foreground min-w-0 truncate">
+                      Ajuste {dateFormatter.format(proforma.receivedDate)} ·{' '}
+                      <span className="font-mono">{proforma.proformaNumber}</span>
+                      {line.adjustmentReason ? ` · ${line.adjustmentReason}` : ''}
+                    </span>
+                    <span
+                      className={`tabular-nums shrink-0 ${line.amount >= 0 ? 'text-green-700' : 'text-red-700'}`}
+                    >
+                      {line.amount >= 0 ? '+' : '−'}
+                      {formatCurrency(Math.abs(line.amount))}
+                    </span>
+                  </li>
+                ))}
+                <li className="flex justify-between gap-2 border-t pt-1 font-medium">
+                  <span>Ingreso total</span>
+                  <span className="tabular-nums">{formatCurrency(originalIncome + adjustmentsTotal)}</span>
+                </li>
+              </ul>
             </div>
           )}
 
@@ -134,20 +188,40 @@ export function TripBillingSection({
             </p>
           ) : (
             <ul className="space-y-3 text-sm">
-              {proformas.map((p) => (
-                <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
-                  <div>
-                    <Link
-                      href="/app/proformas"
-                      className="font-mono font-medium hover:underline"
-                    >
-                      {p.proformaNumber}
-                    </Link>
-                    <span className="text-muted-foreground ml-2">{formatCurrency(p.total)}</span>
-                  </div>
-                  <Badge variant="outline">{proformaStatusLabels[p.status]}</Badge>
-                </li>
-              ))}
+              {proformas.map((p) => {
+                const line = lineByProformaId.get(p.id)
+                return (
+                  <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href="/app/proformas"
+                        className="font-mono font-medium hover:underline"
+                      >
+                        {p.proformaNumber}
+                      </Link>
+                      {line?.isAdjustment && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] border-amber-500/40 text-amber-800 bg-amber-500/10"
+                        >
+                          Ajuste
+                        </Badge>
+                      )}
+                      <span className="text-muted-foreground">
+                        {line ? (
+                          <>
+                            Este viaje {formatCurrency(line.amount)}
+                            {p.tripIds.length > 1 && ` · total ${formatCurrency(p.total)}`}
+                          </>
+                        ) : (
+                          formatCurrency(p.total)
+                        )}
+                      </span>
+                    </div>
+                    <Badge variant="outline">{proformaStatusLabels[p.status]}</Badge>
+                  </li>
+                )
+              })}
             </ul>
           )}
           <Button variant="link" className="px-0 mt-2" asChild>

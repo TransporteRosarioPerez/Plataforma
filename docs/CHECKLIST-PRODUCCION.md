@@ -42,6 +42,8 @@ Ejecutar en el **SQL Editor** de Supabase, **en este orden**:
 | 9 | `supabase/migrations/010_soft_delete.sql` | Sí | Papelera (`deleted_at`) |
 | 10 | `supabase/migrations/011_trip_observations_soft_delete.sql` | Sí | Soft delete observaciones |
 | 11 | `supabase/migrations/012_trip_unit_price.sql` | Sí | Precio/pallet estimado y real |
+| … | `supabase/migrations/013…026` | Sí | Ver archivos en orden |
+| 27 | `supabase/migrations/027_proforma_trip_adjustments.sql` | Sí | Ajuste de viaje en proformas (correr **antes** de deployar el código) |
 
 - [ ] Migraciones 001, 002, 005, 006, 007, 008, 010, 011, 012 ejecutadas sin error
 - [ ] Migración 004 ejecutada (obligatoria si migrás desde Neon/legado)
