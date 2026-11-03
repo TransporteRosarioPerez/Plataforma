@@ -111,6 +111,8 @@ export function ResumenView({ month, scope, availableMonths, summary, chart, bal
         <ProfitCard profit={profit} />
       </div>
 
+      <CashByAccount cash={cash} />
+
       <div className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader>
@@ -239,6 +241,62 @@ function CashCard({ cash }: { cash: CashPosition }) {
             No incluye {cash.skippedAccounts.join(', ')}: su saldo inicial empieza después de este mes.
           </p>
         )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function CashByAccount({ cash }: { cash: CashPosition }) {
+  const cell = (n: number, strong = false) => (
+    <TableCell className={`text-right tabular-nums ${strong ? 'font-semibold' : ''} ${n < 0 ? 'text-red-700 dark:text-red-400' : ''}`}>
+      {Math.abs(n) < 0.005 ? '—' : formatMoney(n)}
+    </TableCell>
+  )
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>¿En qué cuenta estaba la plata?</CardTitle>
+        <CardDescription>
+          Cada cuenta del {formatDate(cash.startDate)} al {formatDate(cash.endDate)}. «Entre cuentas propias» es plata que pasó
+          de una cuenta a otra: no es ingreso ni gasto, y en el total se compensa (salvo lo que fue a cuentas que no están cargadas).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Cuenta</TableHead>
+              <TableHead className="text-right">Al empezar</TableHead>
+              <TableHead className="text-right">+ Entró</TableHead>
+              <TableHead className="text-right">− Salió</TableHead>
+              <TableHead className="text-right">± Entre cuentas propias</TableHead>
+              <TableHead className="text-right">Al terminar</TableHead>
+              <TableHead className="text-right">Cambio en el mes</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {cash.byAccount.map((r) => (
+              <TableRow key={r.accountId}>
+                <TableCell className="font-medium">{r.name}</TableCell>
+                {cell(r.start)}
+                {cell(r.inflow)}
+                {cell(-r.outflow)}
+                {cell(r.transfers)}
+                {cell(r.end, true)}
+                {cell(r.end - r.start)}
+              </TableRow>
+            ))}
+            <TableRow className="border-t-2 font-semibold">
+              <TableCell>Total</TableCell>
+              {cell(cash.start, true)}
+              {cell(cash.inflow, true)}
+              {cell(-cash.outflow, true)}
+              {cell(cash.otherAccounts, true)}
+              {cell(cash.end, true)}
+              {cell(cash.end - cash.start, true)}
+            </TableRow>
+          </TableBody>
+        </Table>
       </CardContent>
     </Card>
   )

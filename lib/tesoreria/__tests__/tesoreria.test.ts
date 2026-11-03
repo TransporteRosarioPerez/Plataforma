@@ -566,3 +566,24 @@ test('Resumen: plata en las cuentas y ganancia aproximada del mes', async () => 
   assert.equal(profit.personalExpenses, 50)
   assert.equal(profit.profit, 1050)
 })
+
+test('Resumen: plata por cuenta, las transferencias propias se compensan en el total', async () => {
+  const { cashPosition } = await import('@/lib/tesoreria/monthly')
+  const acc = (id: string, openingBalance: number) =>
+    ({ id, code: id, name: id, kind: 'bank', provider: null, currency: 'ARS', openingBalance, openingDate: '2026-10-01', isActive: true, sortOrder: 1 }) as const
+  const tx = (id: string, accountId: string, amount: number, isInternal = false) =>
+    ({ id, accountId, txDate: '2026-10-05', amount, isInternal, categoryId: null, scope: null, deletedAt: null, classification: 'auto' }) as unknown as TreasuryTransaction
+  const cash = cashPosition([acc('macro', -100), acc('icbc', 10)], [
+    tx('1', 'macro', 500),
+    tx('2', 'macro', -80, true), // Macro → ICBC
+    tx('3', 'icbc', 80, true),
+    tx('4', 'icbc', -60),
+  ], '2026-10', '2026-11-03')
+  const macro = cash.byAccount.find((r) => r.accountId === 'macro')!
+  const icbc = cash.byAccount.find((r) => r.accountId === 'icbc')!
+  assert.deepEqual([macro.start, macro.inflow, macro.outflow, macro.transfers, macro.end], [-100, 500, 0, -80, 320])
+  assert.deepEqual([icbc.start, icbc.inflow, icbc.outflow, icbc.transfers, icbc.end], [10, 0, 60, 80, 30])
+  assert.equal(cash.start, -90)
+  assert.equal(cash.otherAccounts, 0)
+  assert.equal(cash.end, 350)
+})

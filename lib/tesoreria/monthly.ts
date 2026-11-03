@@ -12,6 +12,17 @@ const NOT_AN_EXPENSE = new Set(['Pago de préstamos'])
 
 export type InvoiceForMonth = { issueDate: string; total: number; status: string }
 
+export type AccountCashPosition = {
+  accountId: string
+  name: string
+  start: number
+  inflow: number
+  outflow: number
+  /** Transferencias entre cuentas propias (a otra cuenta cargada o a una que no está en Tesorería). */
+  transfers: number
+  end: number
+}
+
 export type CashPosition = {
   start: number
   inflow: number
@@ -23,6 +34,7 @@ export type CashPosition = {
   endDate: string
   /** Cuentas que todavía no tenían saldo inicial cargado al empezar el mes. */
   skippedAccounts: string[]
+  byAccount: AccountCashPosition[]
 }
 
 export type MonthlyProfit = {
@@ -58,36 +70,49 @@ export function cashPosition(
   const { first, last } = monthBounds(month, today)
   const active = accounts.filter((a) => a.isActive)
   const included = active.filter((a) => !a.openingDate || a.openingDate <= first)
-  const ids = new Set(included.map((a) => a.id))
-  const opening = new Map(included.map((a) => [a.id, a.openingDate]))
-
-  let start = included.reduce((acc, a) => acc + a.openingBalance, 0)
-  let end = start
-  let inflow = 0
-  let outflow = 0
+  const rows = new Map(
+    included.map((a) => [
+      a.id,
+      { accountId: a.id, name: a.name, start: a.openingBalance, inflow: 0, outflow: 0, transfers: 0, end: a.openingBalance, from: a.openingDate },
+    ])
+  )
 
   for (const t of txs) {
-    if (t.deletedAt || !ids.has(t.accountId)) continue
-    const from = opening.get(t.accountId)
-    if (from && t.txDate < from) continue
-    if (t.txDate < first) start += t.amount
-    if (t.txDate <= last) end += t.amount
-    if (t.txDate >= first && t.txDate <= last && !t.isInternal) {
-      if (t.amount >= 0) inflow += t.amount
-      else outflow += -t.amount
+    const row = rows.get(t.accountId)
+    if (t.deletedAt || !row) continue
+    if (row.from && t.txDate < row.from) continue
+    if (t.txDate < first) row.start += t.amount
+    if (t.txDate <= last) row.end += t.amount
+    if (t.txDate >= first && t.txDate <= last) {
+      if (t.isInternal) row.transfers += t.amount
+      else if (t.amount >= 0) row.inflow += t.amount
+      else row.outflow += -t.amount
     }
   }
 
   const round = (n: number) => Math.round(n * 100) / 100
+  const byAccount: AccountCashPosition[] = [...rows.values()].map((r) => ({
+    accountId: r.accountId,
+    name: r.name,
+    start: round(r.start),
+    inflow: round(r.inflow),
+    outflow: round(r.outflow),
+    // Lo que no explican entradas y salidas (internas y movimientos fuera de la fecha de apertura).
+    transfers: round(r.end - r.start - (r.inflow - r.outflow)),
+    end: round(r.end),
+  }))
+  const sum = (k: 'start' | 'inflow' | 'outflow' | 'transfers' | 'end') => round(byAccount.reduce((acc, r) => acc + r[k], 0))
+
   return {
-    start: round(start),
-    inflow: round(inflow),
-    outflow: round(outflow),
-    otherAccounts: round(end - start - (inflow - outflow)),
-    end: round(end),
+    start: sum('start'),
+    inflow: sum('inflow'),
+    outflow: sum('outflow'),
+    otherAccounts: sum('transfers'),
+    end: sum('end'),
     startDate: first,
     endDate: last,
-    skippedAccounts: active.filter((a) => !ids.has(a.id)).map((a) => a.name),
+    skippedAccounts: active.filter((a) => !rows.has(a.id)).map((a) => a.name),
+    byAccount,
   }
 }
 
