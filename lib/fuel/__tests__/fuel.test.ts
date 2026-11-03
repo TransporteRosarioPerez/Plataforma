@@ -2,7 +2,20 @@
 // Fixture: planilla en papel de octubre 2026 (montos escritos a mano).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { fuelByVehicle, monthKey, pricePerLiter, summarizeFuel, type FuelLoadForReport } from '@/lib/fuel/report'
+import {
+  fuelByDriver,
+  fuelByMonth,
+  fuelByTrip,
+  fuelByVehicle,
+  monthKey,
+  pctChange,
+  periodMonths,
+  previousPeriodMonths,
+  pricePerLiter,
+  share,
+  summarizeFuel,
+  type FuelLoadForReport,
+} from '@/lib/fuel/report'
 import { matchFuelRowToTrips } from '@/lib/fuel/matcher'
 
 const fleet = [
@@ -109,4 +122,47 @@ test('carga manual se vincula al viaje del camión en esas fechas', () => {
   assert.equal(r.matchedPlateRole, 'truck')
   assert.equal(matchFuelRowToTrips({ plate: 'AC755XY', transactionAt: new Date('2026-10-02T12:00:00-03:00') }, trips).matchedPlateRole, 'semi')
   assert.equal(matchFuelRowToTrips({ plate: 'AH553HD', transactionAt: new Date('2026-10-08T12:00:00-03:00') }, trips).status, 'unlinked')
+})
+
+test('períodos: mes, últimos n meses y el período anterior', () => {
+  assert.deepEqual(periodMonths('2026-10', '2026-11'), ['2026-10'])
+  assert.deepEqual(previousPeriodMonths('2026-01', '2026-11'), ['2025-12'])
+  assert.deepEqual(periodMonths('last-3', '2026-02'), ['2025-12', '2026-01', '2026-02'])
+  assert.deepEqual(previousPeriodMonths('last-3', '2026-02'), ['2025-09', '2025-10', '2025-11'])
+  assert.equal(periodMonths('all', '2026-11'), null)
+  assert.equal(previousPeriodMonths('all', '2026-11'), null)
+  assert.equal(pctChange(110, 100), 10)
+  assert.equal(pctChange(5, 0), null)
+  assert.equal(share(25, 200), 12.5)
+})
+
+test('por chofer: suma todas sus unidades, ordenado por pesos', () => {
+  const rows = fuelByDriver(toLoads())
+  assert.equal(rows.length, 5)
+  const facundo = rows.find((r) => r.name === 'Facundo')!
+  assert.equal(facundo.loads, 5)
+  assert.equal(facundo.liters, 1438.9)
+  assert.equal(facundo.amount, 2902393.4)
+  const gustavo = rows.find((r) => r.name === 'Gustavo Javier')!
+  assert.deepEqual(gustavo.plates, ['AE768HQ', 'LFI599'], 'camión y térmico')
+  assert.equal(gustavo.pendingPriceLoads, 1)
+  assert.equal(rows[0].name, 'Facundo', 'el que más gastó primero')
+  assert.equal(rows.reduce((s, r) => s + r.loads, 0), 17)
+})
+
+test('por mes: completa los meses sin cargas', () => {
+  const rows = fuelByMonth(toLoads(), ['2026-09', '2026-10', '2026-11'])
+  assert.deepEqual(rows.map((r) => r.loads), [0, 17, 0])
+  assert.equal(rows[1].avgPricePerLiter, 2438.6)
+  assert.equal(rows[0].avgPricePerLiter, null)
+})
+
+test('por viaje: litros cada 100 km y costo por km con los km del viaje', () => {
+  const loads = toLoads().map((l) => (l.plate === 'AH553HD' ? { ...l, tripId: 't1' } : l))
+  const rows = fuelByTrip(loads, [{ id: 't1', code: 'V-100', totalKilometers: 4000 }, { id: 't2', code: 'V-200' }])
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].liters, 1438.9)
+  assert.equal(rows[0].litersPer100Km, 35.97)
+  assert.equal(rows[0].costPerKm, 725.6)
+  assert.deepEqual(rows[0].drivers, ['Facundo'])
 })

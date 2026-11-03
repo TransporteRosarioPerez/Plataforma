@@ -2,17 +2,19 @@
 
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import type { FuelSummary, FuelVehicleRow } from '@/lib/fuel/report'
+import { share, type FuelSummary, type FuelVehicleRow } from '@/lib/fuel/report'
+import { ShareCell } from '@/components/fuel/share-cell'
 import { formatArs, formatLiters, formatPricePerLiter } from '@/components/fuel/format'
 
 type FuelVehicleReportProps = {
   rows: FuelVehicleRow[]
   total: FuelSummary
+  emptyText?: string
 }
 
-export function FuelVehicleReport({ rows, total }: FuelVehicleReportProps) {
+export function FuelVehicleReport({ rows, total, emptyText = 'No hay cargas en este período.' }: FuelVehicleReportProps) {
   if (rows.length === 0) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">No hay cargas en este período.</p>
+    return <p className="py-8 text-center text-sm text-muted-foreground">{emptyText}</p>
   }
 
   const showConsumption = rows.some((r) => r.consumption)
@@ -27,6 +29,7 @@ export function FuelVehicleReport({ rows, total }: FuelVehicleReportProps) {
             <TableHead className="text-right">Cargas</TableHead>
             <TableHead className="text-right">Litros</TableHead>
             <TableHead className="text-right">Total $</TableHead>
+            <TableHead className="text-right">% del gasto</TableHead>
             <TableHead className="text-right">$ / litro prom.</TableHead>
             <TableHead className="text-right">Sin precio</TableHead>
             {showConsumption && <TableHead className="text-right">L / 100 km</TableHead>}
@@ -50,6 +53,9 @@ export function FuelVehicleReport({ rows, total }: FuelVehicleReportProps) {
               <TableCell className="text-right tabular-nums">{r.loads}</TableCell>
               <TableCell className="text-right font-medium tabular-nums">{formatLiters(r.liters)}</TableCell>
               <TableCell className="text-right font-medium tabular-nums">{formatArs(r.amount)}</TableCell>
+              <TableCell>
+                <ShareCell value={share(r.amount, total.amount)} />
+              </TableCell>
               <TableCell className="text-right tabular-nums">
                 {r.avgPricePerLiter != null ? formatPricePerLiter(r.avgPricePerLiter) : '—'}
               </TableCell>
@@ -76,6 +82,7 @@ export function FuelVehicleReport({ rows, total }: FuelVehicleReportProps) {
             <TableCell className="text-right tabular-nums">{total.loads}</TableCell>
             <TableCell className="text-right font-semibold tabular-nums">{formatLiters(total.liters)}</TableCell>
             <TableCell className="text-right font-semibold tabular-nums">{formatArs(total.amount)}</TableCell>
+            <TableCell className="text-right tabular-nums">100%</TableCell>
             <TableCell className="text-right tabular-nums">
               {total.avgPricePerLiter != null ? formatPricePerLiter(total.avgPricePerLiter) : '—'}
             </TableCell>

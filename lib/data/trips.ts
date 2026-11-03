@@ -133,6 +133,8 @@ const proformaTripSelect = `
 const fuelTripSelect = `
   id,
   code,
+  departure_date,
+  total_kilometers,
   vehicles:vehicles!trips_vehicle_id_fkey (plate),
   trailers:vehicles!trips_trailer_id_fkey (plate)
 `
@@ -140,6 +142,8 @@ const fuelTripSelect = `
 export type TripFuelOption = {
   id: string
   code: string
+  departureDate?: Date
+  totalKilometers?: number
   vehiclePlate?: string
   trailerPlate?: string
 }
@@ -297,6 +301,8 @@ export const getTripFuelOptions = cache(async (): Promise<TripFuelOption[]> => {
     return {
       id: row.id as string,
       code: row.code as string,
+      departureDate: row.departure_date ? new Date(row.departure_date as string) : undefined,
+      totalKilometers: row.total_kilometers != null ? Number(row.total_kilometers) : undefined,
       vehiclePlate: vehicle?.plate,
       trailerPlate: trailer?.plate,
     }
