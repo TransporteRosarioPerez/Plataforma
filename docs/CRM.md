@@ -91,3 +91,58 @@ Tablas `crm_*`, independientes del resto (no se cruzan con Clientes de facturaci
 - Papelera: cotizaciones y empresas (las fusionadas no se recuperan).
 - Auditoría: pase al board, descarte, ganada/perdida, borrados, fusiones, tarifas.
 - La lógica pura está en `lib/crm/*.ts`; servidor en `lib/crm/server/*`; UI en `components/crm/*`.
+
+## Prospección: cargas de vuelta (`/app/crm/prospectos`)
+
+Para no volver vacío: base de empresas que mandan carga **hacia Buenos Aires** (fruta del Alto Valle,
+cítricos y arándanos de Tucumán, etc.) y una secuencia de mails que sale desde la casilla de Gmail de la empresa.
+
+- **Migración:** `supabase/migrations/026_crm_prospectos.sql` (después de la 025; se puede volver a correr).
+- **Tests:** `pnpm test:crm` (incluye `prospecting.test.ts`).
+- **Primera tanda:** `docs/prospectos/carga-retorno-tanda-1.csv` (35 empresas, fuentes en cada fila) → botón **Importar CSV**.
+
+### Flujo
+
+```
+Importar CSV / cargar a mano ──► Prospectos ──► seleccionar ──► "Enviar mail de vuelta" (vista previa + confirmar)
+                                                                     │
+                     job (cron 10 h lun–vie + "Sincronizar ahora")    ▼
+   ┌───────────────── envía hasta N por día desde Gmail (mail 1, después seguimientos día 4, 10 y 18 en el mismo hilo)
+   └───────────────── lee los hilos:
+                        respuesta      → pedido en la Bandeja de entrada (canal mail) y se corta la secuencia
+                        "no" / baja    → lista de bajas, nunca más se le escribe
+                        rebote         → rebotado + lista de bajas
+                        respuesta automática (vacaciones) → se ignora
+```
+
+- **Plantillas** (`/app/crm/prospectos/plantillas`): 4 mails editables con vista previa. Variables `{saludo} {empresa}
+  {provincia} {localidad} {productos} {dia_vuelta} {gancho} {firma}`; lo que va entre `[[ ]]` se omite si falta un dato.
+- **Rutas de vuelta**: Alto Valle, NOA, Litoral, Cuyo… con el día de vuelta (“los jueves”) que se usa en los mails.
+  Al importar, la ruta se deduce de la columna `ruta` o de la provincia.
+- **Gancho**: una línea personalizada por empresa para el primer mail. Es lo que más sube las respuestas.
+- **Anti-spam**: tope diario (default 25), sólo en horario hábil, texto plano, `List-Unsubscribe` one-click
+  (`/api/crm/unsubscribe`, pide confirmación en el navegador), lista de bajas global (`crm_email_suppressions`).
+- **Estados del prospecto**: Sin contactar → En secuencia → Respondió / Sin respuesta / Pidió baja / Rebotó.
+  Cotizando, Ganado y Perdido se marcan a mano (y cortan la secuencia).
+
+### Configuración (una vez)
+
+1. **Google Cloud** (con la cuenta de Workspace de la empresa): crear proyecto → habilitar **Gmail API** →
+   **Pantalla de consentimiento OAuth** tipo **Interno** (así no hace falta verificación de Google) →
+   **Credenciales → ID de cliente OAuth → Aplicación web**, con URI de redirección
+   `https://<plataforma>/api/crm/gmail/callback` (y `http://localhost:3000/api/crm/gmail/callback` para probar).
+2. **Vercel** → variables `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `CRM_GMAIL_TOKEN_KEY`
+   (`openssl rand -hex 32`; si se cambia, hay que volver a conectar Gmail) y `CRM_PUBLIC_URL`. `CRON_SECRET` ya existe.
+3. Correr la migración 026, desplegar y en **CRM → Prospectos → Conectar Gmail** autorizar la casilla
+   (permisos: enviar y leer). La casilla tiene que tener SPF, DKIM y DMARC configurados (Google Workspace → Autenticar correo).
+4. Completar el día de vuelta de cada ruta en **Plantillas** y revisar los textos.
+
+### Job
+
+`GET /api/cron/crm-outreach` (Bearer `CRON_SECRET`), en `vercel.json` a las 13:00 UTC (10 h Argentina) de lunes a viernes.
+En el plan Hobby de Vercel los cron corren una vez por día; con Pro conviene `*/30 12-21 * * 1-5` para leer respuestas
+cada media hora. Mientras tanto, **Sincronizar ahora** hace lo mismo a mano.
+
+Tablas: `crm_prospects`, `crm_outreach_routes`, `crm_outreach_templates`, `crm_outreach` (una secuencia por prospecto;
+guarda el hilo de Gmail), `crm_outreach_messages`, `crm_email_suppressions`, `crm_gmail_connection` (fila única;
+refresh token cifrado con AES-256-GCM; sin políticas RLS, sólo service role).

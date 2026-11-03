@@ -104,6 +104,12 @@ export const AUDIT_ACTIONS = {
   crmCompanyDelete: 'crm.company.delete',
   crmCompanyMerge: 'crm.company.merge',
   crmRateUpsert: 'crm.rate.upsert',
+  crmProspectUpsert: 'crm.prospect.upsert',
+  crmProspectImport: 'crm.prospect.import',
+  crmProspectDelete: 'crm.prospect.delete',
+  crmOutreachStart: 'crm.outreach.start',
+  crmOutreachTemplate: 'crm.outreach.template',
+  crmGmailConnect: 'crm.gmail.connect',
 } as const
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS]
@@ -214,6 +220,12 @@ export const auditActionLabels: Record<AuditAction, string> = {
   [AUDIT_ACTIONS.crmCompanyDelete]: 'CRM: empresa eliminada',
   [AUDIT_ACTIONS.crmCompanyMerge]: 'CRM: empresas fusionadas',
   [AUDIT_ACTIONS.crmRateUpsert]: 'CRM: tarifa',
+  [AUDIT_ACTIONS.crmProspectUpsert]: 'CRM: prospecto',
+  [AUDIT_ACTIONS.crmProspectImport]: 'CRM: prospectos importados',
+  [AUDIT_ACTIONS.crmProspectDelete]: 'CRM: prospectos eliminados',
+  [AUDIT_ACTIONS.crmOutreachStart]: 'CRM: secuencia de mails iniciada',
+  [AUDIT_ACTIONS.crmOutreachTemplate]: 'CRM: plantillas de prospección',
+  [AUDIT_ACTIONS.crmGmailConnect]: 'CRM: Gmail conectado',
 }
 
 export const auditActionOptions = Object.entries(auditActionLabels).map(([value, label]) => ({

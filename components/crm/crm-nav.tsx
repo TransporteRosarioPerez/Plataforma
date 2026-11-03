@@ -8,6 +8,7 @@ const ITEMS = [
   { href: '/app/crm', label: 'Board', exact: true },
   { href: '/app/crm/bandeja', label: 'Bandeja de entrada' },
   { href: '/app/crm/empresas', label: 'Empresas' },
+  { href: '/app/crm/prospectos', label: 'Prospectos' },
   { href: '/app/crm/metricas', label: 'Métricas' },
   { href: '/app/crm/tarifario', label: 'Tarifario' },
 ]

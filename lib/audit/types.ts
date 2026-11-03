@@ -35,6 +35,7 @@ export type AuditEntityType =
   | 'crm_company'
   | 'crm_inbound_request'
   | 'crm_rate'
+  | 'crm_prospect'
 
 export type AuditLog = {
   id: string
