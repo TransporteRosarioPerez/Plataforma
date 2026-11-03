@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Scale, User } from 'lucide-react'
+import { AlertTriangle, Briefcase, Wallet } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,11 +16,12 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { AccountBalance, MonthTotal, ScopeFilter, TreasurySummary } from '@/lib/tesoreria/summary'
 import type { ChequeOutlook } from '@/lib/tesoreria/cheques'
+import type { CashPosition, MonthlyProfit } from '@/lib/tesoreria/monthly'
 import { formatDate, formatMoney, formatMoneyCompact, formatMonth } from './format'
 
 const chartConfig = {
-  income: { label: 'Ingresos', color: 'var(--chart-2)' },
-  expense: { label: 'Egresos', color: 'var(--chart-1)' },
+  income: { label: 'Entró', color: 'var(--chart-2)' },
+  expense: { label: 'Salió', color: 'var(--chart-1)' },
 } satisfies ChartConfig
 
 type Props = {
@@ -32,9 +33,11 @@ type Props = {
   balances: AccountBalance[]
   hasData: boolean
   cheques: ChequeOutlook
+  cash: CashPosition
+  profit: MonthlyProfit
 }
 
-export function ResumenView({ month, scope, availableMonths, summary, chart, balances, hasData, cheques }: Props) {
+export function ResumenView({ month, scope, availableMonths, summary, chart, balances, hasData, cheques, cash, profit }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -103,38 +106,16 @@ export function ResumenView({ month, scope, availableMonths, summary, chart, bal
         )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Kpi icon={<ArrowDownLeft className="h-4 w-4" />} title="Ingresos" value={summary.income} tone="text-green-700 dark:text-green-400" />
-        <Kpi icon={<ArrowUpRight className="h-4 w-4" />} title="Egresos" value={summary.expense} />
-        <Kpi
-          icon={<Scale className="h-4 w-4" />}
-          title="Resultado"
-          value={summary.net}
-          tone={summary.net >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}
-        />
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <User className="h-4 w-4" />
-              Gastos personales
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold tabular-nums">{formatMoney(summary.personalExpense)}</div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {summary.personalShareOfIncome === null
-                ? 'Sin ingresos en el período'
-                : `${(summary.personalShareOfIncome * 100).toFixed(1)}% de lo que entró`}
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <CashCard cash={cash} />
+        <ProfitCard profit={profit} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
           <CardHeader>
-            <CardTitle>Últimos 6 meses</CardTitle>
-            <CardDescription>Sin transferencias internas</CardDescription>
+            <CardTitle>Plata que entró y salió · últimos 6 meses</CardTitle>
+            <CardDescription>Sin transferencias entre cuentas propias. No es ganancia: es movimiento de plata.</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="aspect-[16/7] w-full">
@@ -212,17 +193,98 @@ export function ResumenView({ month, scope, availableMonths, summary, chart, bal
   )
 }
 
-function Kpi({ icon, title, value, tone }: { icon: React.ReactNode; title: string; value: number; tone?: string }) {
+function money(n: number) {
+  return <span className={n < 0 ? 'text-red-700 dark:text-red-400' : ''}>{formatMoney(n)}</span>
+}
+
+function Line({ label, hint, value, sign, strong }: { label: string; hint?: string; value: number; sign?: '+' | '−' | '±'; strong?: boolean }) {
+  return (
+    <div className={`flex items-baseline justify-between gap-4 ${strong ? 'border-t pt-3 text-base font-semibold' : 'text-sm'}`}>
+      <div>
+        <span>{sign && <span className="mr-1 inline-block w-3 text-muted-foreground">{sign}</span>}{label}</span>
+        {hint && <p className={`text-xs font-normal text-muted-foreground ${sign ? 'ml-4' : ''}`}>{hint}</p>}
+      </div>
+      <span className="shrink-0 tabular-nums">{sign === '−' ? formatMoney(value) : money(value)}</span>
+    </div>
+  )
+}
+
+function CashCard({ cash }: { cash: CashPosition }) {
+  const delta = cash.end - cash.start
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          {icon}
-          {title}
-        </CardTitle>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Wallet className="h-5 w-5 text-muted-foreground" />¿Cuánta plata hay?</CardTitle>
+        <CardDescription>Todas las cuentas juntas: lo que había, lo que entró, lo que salió y lo que quedó.</CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className={`text-2xl font-bold tabular-nums ${tone ?? ''}`}>{formatMoney(value)}</div>
+      <CardContent className="space-y-3">
+        <Line label={`Al empezar el mes (${formatDate(cash.startDate)})`} value={cash.start} />
+        <Line sign="+" label="Entró" value={cash.inflow} />
+        <Line sign="−" label="Salió" value={cash.outflow} />
+        {Math.abs(cash.otherAccounts) >= 1 && (
+          <Line
+            sign="±"
+            label="Fue o vino de otras cuentas propias"
+            hint="Cuentas que no están en Tesorería (por ejemplo, «compensación entre tus cuentas»)"
+            value={cash.otherAccounts}
+          />
+        )}
+        <Line strong label={`Al ${formatDate(cash.endDate)}`} value={cash.end} />
+        <p className={`rounded-md px-3 py-2 text-sm ${delta >= 0 ? 'bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-100' : 'bg-red-50 text-red-900 dark:bg-red-950 dark:text-red-100'}`}>
+          En el mes la plata en las cuentas {delta >= 0 ? 'subió' : 'bajó'} <strong className="tabular-nums">{formatMoney(Math.abs(delta))}</strong>
+          {cash.start < 0 && cash.end > cash.start && ' (parte se usó para cubrir el descubierto con que arrancó el mes)'}.
+        </p>
+        {cash.skippedAccounts.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            No incluye {cash.skippedAccounts.join(', ')}: su saldo inicial empieza después de este mes.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ProfitCard({ profit }: { profit: MonthlyProfit }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2"><Briefcase className="h-5 w-5 text-muted-foreground" />¿Se ganó plata trabajando?</CardTitle>
+        <CardDescription>Lo que se facturó en el mes menos lo que costó. Es aproximado.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <Line
+          label="Facturado en el mes"
+          hint={`${profit.invoiceCount} factura${profit.invoiceCount === 1 ? '' : 's'}, con IVA · sección Facturas`}
+          value={profit.invoiced}
+        />
+        <Line
+          sign="−"
+          label="Gastos de la empresa"
+          hint={profit.committedChequeCount > 0 ? `Incluye ${profit.committedChequeCount} cheque${profit.committedChequeCount === 1 ? '' : 's'} firmado${profit.committedChequeCount === 1 ? '' : 's'} y todavía no debitado${profit.committedChequeCount === 1 ? '' : 's'} (${formatMoney(profit.committedCheques)})` : undefined}
+          value={profit.expenses}
+        />
+        <Line strong label="Ganancia aproximada" value={profit.profit} />
+
+        <div className="space-y-1 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground">Aparte, no entra en la cuenta:</p>
+          <p>Gastos personales: <span className="tabular-nums">{formatMoney(profit.personalExpenses)}</span></p>
+          {profit.loanPayments > 0 && (
+            <p>Cuotas de préstamos: <span className="tabular-nums">{formatMoney(profit.loanPayments)}</span> (devolver un préstamo no es un gasto; los intereses sí cuentan)</p>
+          )}
+        </div>
+
+        {profit.invoiceCount === 0 && (
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-400">No hay facturas cargadas con fecha de este mes: la ganancia no va a ser real hasta cargarlas.</p>
+        )}
+        {profit.unclassifiedCount > 0 && (
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+            Incluye {profit.unclassifiedCount} gasto{profit.unclassifiedCount === 1 ? '' : 's'} sin clasificar ({formatMoney(profit.unclassifiedAmount)}). Clasificalos en Pendientes: si alguno es personal o interno, la ganancia cambia.
+          </p>
+        )}
+        <ul className="list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+          <li>La tarjeta de crédito cuenta en el mes en que se paga el resumen.</li>
+          <li>Los cheques cuentan en el mes en que se firman, si están registrados en Cheques.</li>
+        </ul>
       </CardContent>
     </Card>
   )

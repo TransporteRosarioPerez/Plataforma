@@ -1,4 +1,5 @@
-import { getAccounts, getCategories, getCheques, getTransactions } from '@/lib/tesoreria/server/data'
+import { getAccounts, getCategories, getCheques, getInvoicesForMonth, getTransactions } from '@/lib/tesoreria/server/data'
+import { cashPosition, monthlyProfit } from '@/lib/tesoreria/monthly'
 import { chequeOutlook } from '@/lib/tesoreria/cheques'
 import { accountBalances, monthKey, summarize, type ScopeFilter } from '@/lib/tesoreria/summary'
 import { ResumenView } from '@/components/tesoreria/resumen-view'
@@ -28,6 +29,9 @@ export default async function TesoreriaResumenPage({ searchParams }: { searchPar
   const scope: ScopeFilter =
     params.ambito === 'empresa' || params.ambito === 'personal' ? params.ambito : 'todo'
 
+  const today = new Date().toISOString().slice(0, 10)
+  const invoices = await getInvoicesForMonth(month)
+
   const inMonth = all.filter((t) => monthKey(t.txDate) === month)
   const firstChartMonth = shiftMonth(month, -5)
   const inChart = all.filter((t) => {
@@ -44,7 +48,9 @@ export default async function TesoreriaResumenPage({ searchParams }: { searchPar
       chart={summarize(inChart, categories, scope).byMonth}
       balances={accountBalances(accounts, all)}
       hasData={all.length > 0}
-      cheques={chequeOutlook(cheques, new Date().toISOString().slice(0, 10))}
+      cheques={chequeOutlook(cheques, today)}
+      cash={cashPosition(accounts, all, month, today)}
+      profit={monthlyProfit(all, categories, cheques, invoices, month)}
     />
   )
 }

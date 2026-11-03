@@ -33,14 +33,15 @@ separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las
    - Si un extracto trae movimientos de un mes cerrado, la importación lo avisa y hay que confirmarlo a propósito. Queda registrado en Auditoría.
    - **Arqueo de efectivo:** se carga lo contado y se compara con el sistema. Opcionalmente se registra el ajuste en "Diferencias de caja".
 6. **Movimientos.** Tabla con filtros y edición. Desde acá se carga a mano el **efectivo** y las transferencias entre cuentas.
-7. **Resumen.** Muestra para el mes elegido:
-   - ingresos, egresos, resultado y gastos personales, con un switch **Todo / Empresa / Personal**,
-   - el saldo de cada cuenta según el sistema, comparado con el último saldo informado por el banco.
+7. **Resumen.** Responde dos preguntas distintas para el mes elegido (`lib/tesoreria/monthly.ts`):
+   - **¿Cuánta plata hay?** Saldo de todas las cuentas al empezar el mes + lo que entró − lo que salió = saldo al terminar. Si no cierra, la diferencia es plata que fue o vino de cuentas propias que no están en Tesorería.
+   - **¿Se ganó plata trabajando?** (aproximada) Lo facturado en el mes (tabla `invoices`, con IVA, sin anuladas) menos los gastos de la empresa. Los cheques registrados cuentan en el mes en que se firmaron, y los firmados sin debitar también suman. No cuentan los gastos personales ni las cuotas de préstamos (se muestran aparte). La tarjeta cuenta cuando se paga.
+   - Abajo: lo que entró y salió en los últimos 6 meses, saldos por cuenta y totales por categoría, con el switch **Todo / Empresa / Personal**.
 
 ## Decisiones
 
 - **Acceso:** sólo superadmin. Se controla con `requireSuperadmin()` en el código y con RLS `public.is_superadmin()` en la base. La ruta está en `SUPERADMIN_ONLY_ROUTES`.
-- **Datos independientes:** las tablas `treasury_*` no referencian viajes, clientes, facturas ni combustible.
+- **Datos independientes:** las tablas `treasury_*` no referencian viajes, clientes, facturas ni combustible. La única lectura de otro módulo es la de `invoices` (sólo lectura) para la ganancia del Resumen.
 - **Infraestructura compartida:**
   - Papelera general (`/app/papelera`): soft delete con `deleted_at` y restauración con `restoreRecord`.
   - Auditoría general: `logAudit` con las acciones `treasury.*`.
@@ -72,6 +73,7 @@ separado de **Reportes → Caja**, que muestra lo facturado y cobrado según las
 | `lib/tesoreria/parsers.ts` | Detección del banco y parsers de Macro y Nación (celdas → `StatementRow`) |
 | `lib/tesoreria/engine.ts` | Deduplicación, control de saldos, clasificación, sugerencia de patrones, pares internos |
 | `lib/tesoreria/summary.ts` | Totales del resumen y saldos por cuenta |
+| `lib/tesoreria/monthly.ts` | Plata al inicio y al final del mes, y ganancia aproximada |
 | `lib/tesoreria/text.ts` | Montos y fechas es-AR, serial de Excel, CUIT |
 | `lib/tesoreria/server/*` | Data layer, server actions y restauración desde la papelera |
 | `components/tesoreria/*` | Vistas |

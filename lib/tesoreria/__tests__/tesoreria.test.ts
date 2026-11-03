@@ -520,3 +520,49 @@ test('ICBC: PDF → celdas → movimientos (año, signos y saldos)', async () =>
   const broken = parseIcbcText(ICBC_TEXT.replace('15-12 PAGO CUOTA PRESTAMO 0086564106 0066 2.000,00-\n', ''))
   assert.ok(broken.warnings.length > 0)
 })
+
+test('Resumen: plata en las cuentas y ganancia aproximada del mes', async () => {
+  const { cashPosition, monthlyProfit } = await import('@/lib/tesoreria/monthly')
+  const acc = (id: string, openingBalance: number) =>
+    ({ id, code: id, name: id, kind: 'bank', provider: null, currency: 'ARS', openingBalance, openingDate: '2026-10-01', isActive: true, sortOrder: 1 }) as const
+  const cats = [
+    { id: 'comb', name: 'Combustible', kind: 'expense', defaultScope: 'empresa', isActive: true, sortOrder: 1 },
+    { id: 'prest', name: 'Pago de préstamos', kind: 'expense', defaultScope: 'empresa', isActive: true, sortOrder: 2 },
+    { id: 'super', name: 'Alimentos', kind: 'expense', defaultScope: 'personal', isActive: true, sortOrder: 3 },
+  ] as unknown as TreasuryCategory[]
+  const tx = (id: string, accountId: string, txDate: string, amount: number, extra: Partial<TreasuryTransaction> = {}) =>
+    ({ id, accountId, txDate, amount, isInternal: false, categoryId: null, scope: null, deletedAt: null, classification: 'pending', ...extra }) as TreasuryTransaction
+  const txs = [
+    tx('a', 'macro', '2026-09-30', -999), // antes del saldo inicial: no cuenta
+    tx('b', 'macro', '2026-10-05', 1000, { categoryId: null, scope: 'empresa' }),
+    tx('c', 'macro', '2026-10-06', -300, { categoryId: 'comb', scope: 'empresa', classification: 'auto' }),
+    tx('d', 'macro', '2026-10-07', -200, { isInternal: true }), // a una cuenta que no está cargada
+    tx('e', 'macro', '2026-10-08', -100, { categoryId: 'prest', scope: 'empresa', classification: 'auto' }),
+    tx('f', 'macro', '2026-10-09', -50, { categoryId: 'super', scope: 'personal', classification: 'auto' }),
+    tx('g', 'macro', '2026-11-02', -400, { categoryId: 'comb', scope: 'empresa', classification: 'auto' }), // cheque firmado en octubre
+    tx('h', 'macro', '2026-11-03', 70),
+  ]
+  const cash = cashPosition([acc('macro', -500)], txs, '2026-10', '2026-11-03')
+  assert.equal(cash.start, -500)
+  assert.equal(cash.inflow, 1000)
+  assert.equal(cash.outflow, 450)
+  assert.equal(cash.otherAccounts, -200)
+  assert.equal(cash.end, -150)
+
+  const cheques = [
+    { id: 'q1', accountId: 'macro', chequeNumber: '1', amount: 400, issueDate: '2026-10-20', paymentDate: '2026-11-02', payeeName: 'X', payeeCuit: null, categoryId: 'comb', scope: 'empresa', notes: null, status: 'debitado', transactionId: 'g' },
+    { id: 'q2', accountId: 'macro', chequeNumber: '2', amount: 250, issueDate: '2026-10-25', paymentDate: '2026-12-01', payeeName: 'Y', payeeCuit: null, categoryId: 'comb', scope: 'empresa', notes: null, status: 'emitido', transactionId: null },
+  ] as const
+  const profit = monthlyProfit(txs, cats, [...cheques], [
+    { issueDate: '2026-10-10', total: 2000, status: 'emitida' },
+    { issueDate: '2026-10-11', total: 999, status: 'anulada' },
+  ], '2026-10')
+  assert.equal(profit.invoiced, 2000)
+  assert.equal(profit.invoiceCount, 1)
+  // 300 combustible + 400 cheque debitado en noviembre pero firmado en octubre + 250 cheque firmado sin debitar
+  assert.equal(profit.expenses, 950)
+  assert.equal(profit.committedCheques, 250)
+  assert.equal(profit.loanPayments, 100)
+  assert.equal(profit.personalExpenses, 50)
+  assert.equal(profit.profit, 1050)
+})

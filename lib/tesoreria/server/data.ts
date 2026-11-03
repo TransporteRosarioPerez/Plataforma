@@ -253,3 +253,19 @@ export async function getLastLoadedBalance(
   const row = data?.[0]
   return row ? { txDate: row.tx_date as string, bankBalance: Number(row.bank_balance) } : null
 }
+
+/** Facturas emitidas en un mes (para la ganancia aproximada del Resumen). */
+export async function getInvoicesForMonth(month: string): Promise<import('../monthly').InvoiceForMonth[]> {
+  await requireSuperadmin()
+  const supabase = await createClient()
+  const [y, m] = month.split('-').map(Number)
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  const { data, error } = await supabase
+    .from('invoices')
+    .select('issue_date, total, status')
+    .is('deleted_at', null)
+    .gte('issue_date', `${month}-01`)
+    .lte('issue_date', `${month}-${String(last).padStart(2, '0')}`)
+  if (error) throw new Error(error.message)
+  return (data ?? []).map((r) => ({ issueDate: r.issue_date as string, total: Number(r.total), status: r.status as string }))
+}
