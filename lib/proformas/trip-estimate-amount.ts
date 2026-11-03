@@ -27,6 +27,8 @@ export type TripBillingHistoryEntry = {
   amount: number
   isAdjustment: boolean
   adjustmentReason?: string
+  /** Ingreso traído del sistema anterior (no es una proforma real). */
+  isLegacy?: boolean
 }
 
 export function getTripEstimatedAmount(trip: Trip): number | null {

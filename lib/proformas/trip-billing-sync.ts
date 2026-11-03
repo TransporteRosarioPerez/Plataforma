@@ -12,11 +12,13 @@ const REVERT_TRIP_STATUS = 'sent'
  * - paid solo si todas esas proformas están cobradas
  * - pending_payment si hay al menos una proforma activa no cobrada
  * - sent + income 0 si no queda ninguna
+ * Si el viaje vino del sistema anterior (legacy_billing_status), su ingreso de
+ * origen se suma como base y, sin proformas, vuelve a su estado de origen.
  */
 export async function resyncTripBilling(supabase: SupabaseClient, tripId: string) {
   const { data: trip, error: tripError } = await supabase
     .from('trips')
-    .select('total_expenses, total_pallets')
+    .select('total_expenses, total_pallets, legacy_billing_status, legacy_income')
     .eq('id', tripId)
     .single()
 
@@ -52,6 +54,22 @@ export async function resyncTripBilling(supabase: SupabaseClient, tripId: string
 
   const totalExpenses = Number(trip.total_expenses)
   const totalPallets = trip.total_pallets != null ? Number(trip.total_pallets) : null
+  // Viaje del sistema anterior: su ingreso/estado de origen es la base
+  const legacyStatus = trip.legacy_billing_status as 'paid' | 'pending_payment' | null
+  const legacyIncome = legacyStatus ? Number(trip.legacy_income ?? 0) : 0
+
+  if (activeLines.length === 0 && legacyStatus) {
+    await supabase
+      .from('trips')
+      .update({
+        status: legacyStatus,
+        total_income: legacyIncome,
+        proforma_unit_price: null,
+        profit: legacyIncome - totalExpenses,
+      })
+      .eq('id', tripId)
+    return
+  }
 
   if (activeLines.length === 0) {
     await supabase
@@ -66,11 +84,14 @@ export async function resyncTripBilling(supabase: SupabaseClient, tripId: string
     return
   }
 
-  const totalIncome = activeLines.reduce((sum, row) => sum + Number(row.amount), 0)
-  const allCobradas = activeLines.every((row) => {
-    const status = activeByProforma.get(row.proforma_id as string)
-    return status === 'cobrada'
-  })
+  const totalIncome =
+    legacyIncome + activeLines.reduce((sum, row) => sum + Number(row.amount), 0)
+  const allCobradas =
+    (!legacyStatus || legacyStatus === 'paid') &&
+    activeLines.every((row) => {
+      const status = activeByProforma.get(row.proforma_id as string)
+      return status === 'cobrada'
+    })
   const status = allCobradas ? 'paid' : 'pending_payment'
   const proformaUnitPrice =
     totalPallets != null && totalPallets > 0 ? totalIncome / totalPallets : null

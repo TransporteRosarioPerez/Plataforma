@@ -73,9 +73,10 @@ function lineItemRows(proformaId: string, lineItems: ParsedLineItem[]) {
 }
 
 /**
- * Un ajuste solo tiene sentido sobre un viaje que ya está en otra proforma
- * activa (facturado o cobrado). Así el ingreso del viaje queda como la suma
- * del importe original + el ajuste.
+ * Un ajuste solo tiene sentido sobre un viaje que ya se facturó: o está en otra
+ * proforma activa, o vino del sistema anterior en Pagado / Pendiente de pago.
+ * En este último caso guarda su ingreso de origen como base (legacy_income)
+ * para que el ajuste se sume sobre él y no lo pise.
  */
 async function validateAdjustmentTrips(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -85,14 +86,53 @@ async function validateAdjustmentTrips(
   if (tripIds.length === 0) return null
 
   const assigned = await getAssignedTripIds(supabase, excludeProformaId)
-  const missing = tripIds.filter((id) => !assigned.has(id))
-  if (missing.length === 0) return null
+  const notAssigned = tripIds.filter((id) => !assigned.has(id))
+  if (notAssigned.length === 0) return null
 
-  const { data: trips } = await supabase.from('trips').select('code').in('id', missing)
-  const codes = (trips ?? []).map((t) => t.code).join(', ')
-  return {
-    error: `Solo se puede ajustar un viaje que ya está en otra proforma${codes ? ` (${codes} no lo está)` : ''}. Agregalo con “Elegir viajes”.`,
+  const { data: trips, error } = await supabase
+    .from('trips')
+    .select('id, code, status, total_income, legacy_billing_status')
+    .in('id', notAssigned)
+    .is('deleted_at', null)
+  if (error) return { error: error.message }
+
+  // ¿Tiene alguna línea en proformas activas (incluida la que se edita)?
+  const { data: lines } = await supabase
+    .from('proforma_line_items')
+    .select('trip_id, proformas!inner(deleted_at)')
+    .in('trip_id', notAssigned)
+    .is('proformas.deleted_at', null)
+  const withLines = new Set((lines ?? []).map((l) => l.trip_id as string))
+
+  const toInit: { id: string; status: string; income: number }[] = []
+  const invalid: string[] = []
+  for (const trip of trips ?? []) {
+    if (trip.legacy_billing_status) continue
+    const isBilled = trip.status === 'paid' || trip.status === 'pending_payment'
+    if (isBilled && !withLines.has(trip.id)) {
+      toInit.push({ id: trip.id, status: trip.status, income: Number(trip.total_income ?? 0) })
+    } else {
+      invalid.push(trip.code)
+    }
   }
+  if ((trips ?? []).length !== notAssigned.length) return { error: 'Uno o más viajes no existen' }
+
+  if (invalid.length > 0) {
+    return {
+      error: `Solo se puede ajustar un viaje ya facturado o cobrado (${invalid.join(', ')} no lo está). Agregalo con “Elegir viajes”.`,
+    }
+  }
+
+  for (const trip of toInit) {
+    const { error: initError } = await supabase
+      .from('trips')
+      .update({ legacy_billing_status: trip.status, legacy_income: trip.income })
+      .eq('id', trip.id)
+      .is('legacy_billing_status', null)
+    if (initError) return { error: initError.message }
+  }
+
+  return null
 }
 
 async function logTripAdjustments(

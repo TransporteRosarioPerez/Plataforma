@@ -61,12 +61,40 @@ function getAssignedTripIds(proformas: Proforma[], excludeProformaId?: string): 
   return ids
 }
 
-/** Líneas de cada viaje en las proformas activas (menos la excluida). */
+function isBilledStatus(trip: Trip) {
+  return trip.status === 'paid' || trip.status === 'pending_payment'
+}
+
+/** Viaje que vino del sistema anterior ya facturado/cobrado, sin proforma acá. */
+function isLegacyBilledTrip(trip: Trip, assignedAnywhere: Set<string>) {
+  return !!trip.legacyBillingStatus || (isBilledStatus(trip) && !assignedAnywhere.has(trip.id))
+}
+
+/** Líneas de cada viaje en las proformas activas (menos la excluida) + base legacy. */
 function buildTripBillingHistory(
   proformas: Proforma[],
+  trips: Trip[],
   excludeProformaId?: string
 ): Record<string, TripBillingHistoryEntry[]> {
   const history: Record<string, TripBillingHistoryEntry[]> = {}
+  const assignedAnywhere = getAssignedTripIds(proformas)
+
+  for (const trip of trips) {
+    if (!isLegacyBilledTrip(trip, assignedAnywhere)) continue
+    const status = trip.legacyBillingStatus ?? trip.status
+    history[trip.id] = [
+      {
+        proformaId: `legacy-${trip.id}`,
+        proformaNumber: 'Sistema anterior',
+        proformaStatus: status === 'paid' ? 'cobrada' : 'pendiente',
+        receivedDate: new Date(0),
+        amount: trip.legacyBillingStatus ? trip.legacyIncome ?? 0 : trip.totalIncome,
+        isAdjustment: false,
+        isLegacy: true,
+      },
+    ]
+  }
+
   for (const p of proformas) {
     if (excludeProformaId && p.id === excludeProformaId) continue
     for (const line of p.lineItems) {
@@ -156,20 +184,27 @@ export function ProformasView({
   }, [editing, proformas])
 
   // Ajuste de viaje: viajes que ya están en otra proforma activa (facturados / cobrados)
+  // o que vinieron del sistema anterior en Pagado / Pendiente de pago
   const adjustableTrips = useMemo(
-    () => trips.filter((t) => assignedTripIds.has(t.id)),
+    () =>
+      trips.filter((t) => assignedTripIds.has(t.id) || isLegacyBilledTrip(t, assignedTripIds)),
     [trips, assignedTripIds]
   )
-  const tripBillingHistory = useMemo(() => buildTripBillingHistory(proformas), [proformas])
+  const tripBillingHistory = useMemo(
+    () => buildTripBillingHistory(proformas, trips),
+    [proformas, trips]
+  )
 
   const editAdjustableTrips = useMemo(() => {
     if (!editing) return adjustableTrips
     const assignedElsewhere = getAssignedTripIds(proformas, editing.id)
-    return trips.filter((t) => assignedElsewhere.has(t.id))
-  }, [adjustableTrips, editing, proformas, trips])
+    return trips.filter(
+      (t) => assignedElsewhere.has(t.id) || isLegacyBilledTrip(t, assignedTripIds)
+    )
+  }, [adjustableTrips, assignedTripIds, editing, proformas, trips])
   const editTripBillingHistory = useMemo(
-    () => (editing ? buildTripBillingHistory(proformas, editing.id) : tripBillingHistory),
-    [editing, proformas, tripBillingHistory]
+    () => (editing ? buildTripBillingHistory(proformas, trips, editing.id) : tripBillingHistory),
+    [editing, proformas, trips, tripBillingHistory]
   )
 
   const filtered = useMemo(() => {

@@ -57,9 +57,10 @@ export function TripBillingSection({
     .sort((a, b) => a.proforma.receivedDate.getTime() - b.proforma.receivedDate.getTime())
   const lineByProformaId = new Map(tripLines.map((x) => [x.proforma.id, x.line]))
   const adjustments = tripLines.filter((x) => x.line.isAdjustment)
-  const originalIncome = tripLines
-    .filter((x) => !x.line.isAdjustment)
-    .reduce((sum, x) => sum + x.line.amount, 0)
+  const legacyIncome = trip.legacyBillingStatus ? trip.legacyIncome ?? 0 : 0
+  const originalIncome =
+    legacyIncome +
+    tripLines.filter((x) => !x.line.isAdjustment).reduce((sum, x) => sum + x.line.amount, 0)
   const adjustmentsTotal = adjustments.reduce((sum, x) => sum + x.line.amount, 0)
 
   return (
@@ -111,7 +112,9 @@ export function TripBillingSection({
               </p>
               <ul className="space-y-1 text-xs">
                 <li className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">Importe original</span>
+                  <span className="text-muted-foreground">
+                    Importe original{trip.legacyBillingStatus ? ' (sistema anterior)' : ''}
+                  </span>
                   <span className="tabular-nums">{formatCurrency(originalIncome)}</span>
                 </li>
                 {adjustments.map(({ proforma, line }) => (

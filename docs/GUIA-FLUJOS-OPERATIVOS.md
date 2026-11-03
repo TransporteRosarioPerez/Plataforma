@@ -326,6 +326,7 @@ A veces el cliente ajusta un viaje meses después (actualización de tarifa, dif
 
 1. En la proforma que trae el ajuste (nueva o existente) → **Ajuste de viaje**
 2. Elegir el/los viajes (por defecto muestra los **Pagados**; se puede buscar por nº de viaje o nº de proforma)
+   - También aparecen los viajes que vinieron **del sistema anterior** ya en Pagado / Pendiente de pago (sin proforma en la plataforma). El ajuste se suma sobre el ingreso que tenían cargado; si era $0, el ingreso queda igual al ajuste.
 3. En cada uno: **Suma** o **Resta**, la **diferencia neta** (no el total del viaje) y el **motivo**
 4. Guardar
 

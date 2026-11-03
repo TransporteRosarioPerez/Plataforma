@@ -36,6 +36,8 @@ type DbTrip = {
   total_income: number
   total_expenses: number
   profit: number
+  legacy_billing_status?: string | null
+  legacy_income?: number | null
   notes: string | null
   metadata: Record<string, unknown>
   external_id: string | null
@@ -86,6 +88,11 @@ function mapTrip(row: DbTrip, observationCount = 0): Trip {
     totalIncome: Number(row.total_income),
     totalExpenses: Number(row.total_expenses),
     profit: Number(row.profit),
+    legacyBillingStatus:
+      row.legacy_billing_status === 'paid' || row.legacy_billing_status === 'pending_payment'
+        ? row.legacy_billing_status
+        : undefined,
+    legacyIncome: row.legacy_income != null ? Number(row.legacy_income) : undefined,
     notes: row.notes ?? undefined,
     observationCount,
     createdAt: new Date(row.created_at),
@@ -121,6 +128,8 @@ const proformaTripSelect = `
   total_income,
   total_expenses,
   profit,
+  legacy_billing_status,
+  legacy_income,
   pdf_storage_key,
   created_at,
   updated_at,

@@ -401,6 +401,11 @@ export interface Trip {
   totalExpenses: number
   profit: number
 
+  /** Estado de cobro con el que vino del sistema anterior (sin proforma acá). */
+  legacyBillingStatus?: 'paid' | 'pending_payment'
+  /** Ingreso que traía del sistema anterior; base para los ajustes. */
+  legacyIncome?: number
+
   notes?: string
   observationCount?: number
   createdAt: Date

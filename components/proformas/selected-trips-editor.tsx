@@ -111,8 +111,15 @@ function AdjustmentLine({
           {history.map((entry) => (
             <li key={entry.proformaId} className="flex justify-between gap-2">
               <span className="truncate">
-                {entry.isAdjustment ? 'Ajuste' : 'Original'} · <span className="font-mono">{entry.proformaNumber}</span>{' '}
-                ({proformaStatusShort[entry.proformaStatus]})
+                {entry.isLegacy ? (
+                  <>Original · sistema anterior ({proformaStatusShort[entry.proformaStatus]})</>
+                ) : (
+                  <>
+                    {entry.isAdjustment ? 'Ajuste' : 'Original'} ·{' '}
+                    <span className="font-mono">{entry.proformaNumber}</span> (
+                    {proformaStatusShort[entry.proformaStatus]})
+                  </>
+                )}
               </span>
               <span className="tabular-nums shrink-0">{formatCurrency(entry.amount)}</span>
             </li>
