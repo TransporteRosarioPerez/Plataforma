@@ -21,8 +21,6 @@ import {
   buildAdjustmentLine,
   buildLineItemsJson,
   buildTripLineFromEstimate,
-  formatTripLineAmount,
-  signedTripLineAmount,
   sumTripLines,
   type TripBillingHistoryEntry,
   type TripLineAdjustment,
@@ -37,7 +35,7 @@ import {
   type ArcorProformaGroup,
 } from '@/lib/proformas/parse-arcor-pdf'
 import { reviewProformaPdf, type TripMatch } from '@/lib/proformas/pdf-review'
-import { roundCents } from '@/lib/pdf/numbers'
+import { buildLinesFromPdf, lineAmountsByTrip } from '@/lib/proformas/pdf-import'
 import { readPdfLines } from '@/lib/pdf/read-pdf-lines'
 import { appendProformaFileToFormData } from '@/lib/documents/upload-proforma-file'
 import type { Client, Trip } from '@/lib/types'
@@ -143,10 +141,7 @@ export function CreateProformaSheet({
 
   const pdfReview = useMemo(() => {
     if (!pdfGroup) return null
-    const amounts = new Map(
-      selectedTripIds.map((id) => [id, roundCents(signedTripLineAmount(tripLines[id]))] as const)
-    )
-    return reviewProformaPdf(pdfGroup, pdfMatches, amounts)
+    return reviewProformaPdf(pdfGroup, pdfMatches, lineAmountsByTrip(selectedTripIds, tripLines))
   }, [pdfGroup, pdfMatches, selectedTripIds, tripLines])
 
   const pdfBlocksSave = !!pdfGroup && !(pdfReview?.ok && pdfReviewed)
@@ -313,37 +308,10 @@ export function CreateProformaSheet({
       if (matchedClientId) setClientId(matchedClientId)
       if (group.issueDate) setReceivedDate(group.issueDate)
 
-      const byTrip = new Map<string, { amount: number; match: TripMatch }>()
-      for (const row of group.rows) {
-        const match = res.matches[row.code]
-        if (!match || match.kind === 'not_billable') continue
-        const prev = byTrip.get(match.tripId)
-        byTrip.set(match.tripId, { amount: roundCents((prev?.amount ?? 0) + row.amount), match })
-      }
-
-      const lines: Record<string, TripLineValues> = {}
-      const shared = new Set<string>()
-      for (const [tripId, { amount, match }] of byTrip) {
-        if (match.kind === 'adjustment') {
-          lines[tripId] = {
-            amount: formatTripLineAmount(Math.abs(amount)),
-            taxes: '0',
-            adjustment: {
-              direction: amount < 0 ? 'down' : 'up',
-              reason:
-                match.otherProformas.length > 0
-                  ? `Según PDF (ya estaba en ${match.otherProformas.join(', ')})`
-                  : 'Según PDF (facturado en el sistema anterior)',
-            },
-          }
-        } else {
-          lines[tripId] = { amount: formatTripLineAmount(amount), taxes: '0' }
-          if (match.kind === 'shared') shared.add(tripId)
-        }
-      }
-      setSelectedTripIds(Array.from(byTrip.keys()))
-      setTripLines(lines)
-      setSharedTripIds(shared)
+      const built = buildLinesFromPdf(group, res.matches)
+      setSelectedTripIds(built.tripIds)
+      setTripLines(built.lines)
+      setSharedTripIds(built.sharedTripIds)
 
       const missing = group.rows.filter((r) => !res.matches[r.code]).length
       toast.success(

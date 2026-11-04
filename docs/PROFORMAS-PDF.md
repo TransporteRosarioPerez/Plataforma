@@ -1,6 +1,21 @@
 # Proformas y facturas desde PDF
 
-## Proforma (Grupo Arcor: Arcor y Bagley)
+## Importar el PDF completo (recomendado)
+
+En **Proformas → Importar PDF** se sube el PDF entero de Grupo Arcor (todas las hojas, sin cortar):
+
+1. Se detectan todas sus proformas, una por compañía + jurisdicción (183853-01-02, 183853-01-03, 183853-33-02…), con sus hojas.
+2. Cada una muestra su estado:
+   - **Para revisar**: todos los viajes existen, el cliente se encontró por CUIT y cada corte cierra con su TOTALES.
+   - **Con problemas**: viaje que no existe en la plataforma, cliente sin CUIT cargado, PDF que no cierra, etc. No se puede guardar.
+   - **Ya cargada**: ese número ya existe; se saltea (se puede reimportar el mismo PDF sin duplicar).
+3. Al abrir cada una se ven viajes, cortes y totales, y la columna **Esperado** (precio unitario × pallets del viaje). Si el PDF difiere de lo esperado se avisa en amarillo; no bloquea porque el PDF manda.
+4. Se tilda "Revisé…" en cada una y **Guardar N revisadas** las guarda de a una, por el mismo `createProforma` de siempre (mismas validaciones y Auditoría).
+5. Cada proforma guarda **sólo sus hojas** del PDF (`183853-01-02 (hojas 1-9).pdf`), cortadas en el navegador con `pdf-lib`.
+
+Un viaje que aparece en dos proformas del mismo PDF (Arcor y Bagley) entra como compartido.
+
+## Proforma de a una (Nueva proforma)
 
 1. En **Proformas → Nueva proforma** se sube el PDF "Resumen de viajes proformados".
 2. El PDF se lee en el navegador (si falla, en el servidor, hasta ~700 KB) y se arma solo:
@@ -38,6 +53,8 @@ Sin PDF (u otro formato) la proforma se sigue cargando a mano como antes.
 | Lectura proforma Arcor | `lib/proformas/parse-arcor-pdf.ts` |
 | Control PDF vs proforma | `lib/proformas/pdf-review.ts`, `components/proformas/proforma-pdf-check.tsx` |
 | Match de viajes | `lib/actions/proforma-pdf.ts` |
+| Importar PDF completo | `components/proformas/import-proformas-pdf-sheet.tsx`, `lib/proformas/pdf-import.ts` |
+| Cortar hojas del PDF | `lib/pdf/split-pages.ts` (dependencia `pdf-lib`) |
 | Lectura factura ARCA | `lib/invoices/parse-arca-pdf.ts` |
 
 Tests: `pnpm test:facturacion` (datos ficticios con la estructura real).

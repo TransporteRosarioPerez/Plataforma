@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Plus, Search, FileText, Pencil, ChevronLeft, ChevronRight,
+  Plus, Search, FileText, Pencil, ChevronLeft, ChevronRight, FileUp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { CreateProformaSheet } from '@/components/proformas/create-proforma-sheet'
+import { ImportProformasPdfSheet } from '@/components/proformas/import-proformas-pdf-sheet'
 import { EditProformaSheet } from '@/components/proformas/edit-proforma-sheet'
 import { deleteProforma } from '@/lib/actions/proformas'
 import { OPERATIONAL_TRIP_STATUSES, type Proforma, Client, Trip, Invoice } from '@/lib/types'
@@ -138,6 +139,7 @@ export function ProformasView({
   const [page, setPage] = useState(1)
 
   const [createOpen, setCreateOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editing, setEditing] = useState<Proforma | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -251,10 +253,16 @@ export function ProformasView({
             el cobro se registra al marcar la factura como Cobrada.
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva proforma
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <FileUp className="mr-2 h-4 w-4" />
+            Importar PDF
+          </Button>
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva proforma
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -394,6 +402,8 @@ export function ProformasView({
         tripBillingHistory={tripBillingHistory}
         allTrips={trips}
       />
+
+      <ImportProformasPdfSheet open={importOpen} onOpenChange={setImportOpen} />
 
       <EditProformaSheet
         open={editOpen}

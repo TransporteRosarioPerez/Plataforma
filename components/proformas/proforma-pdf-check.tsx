@@ -24,10 +24,19 @@ type Props = {
   reviewed: boolean
   onReviewedChange: (value: boolean) => void
   disabled?: boolean
+  /** Muestra el precio esperado de cada viaje en la plataforma (precio unitario × pallets). */
+  showEstimates?: boolean
 }
 
 /** Control de la proforma contra el PDF: hay que tildarlo para poder guardar. */
-export function ProformaPdfCheck({ proformaNumber, review, reviewed, onReviewedChange, disabled }: Props) {
+export function ProformaPdfCheck({
+  proformaNumber,
+  review,
+  reviewed,
+  onReviewedChange,
+  disabled,
+  showEstimates,
+}: Props) {
   const [showRows, setShowRows] = useState(!review.ok)
   const okRows = review.rows.filter((r) => r.state === 'ok').length
 
@@ -108,6 +117,7 @@ export function ProformaPdfCheck({ proformaNumber, review, reviewed, onReviewedC
                   <th className="py-1 font-normal">Fecha</th>
                   <th className="py-1 text-right font-normal">PDF</th>
                   <th className="py-1 text-right font-normal">Proforma</th>
+                  {showEstimates && <th className="py-1 text-right font-normal">Esperado</th>}
                   <th className="py-1 pl-2 font-normal">Estado</th>
                 </tr>
               </thead>
@@ -118,6 +128,19 @@ export function ProformaPdfCheck({ proformaNumber, review, reviewed, onReviewedC
                     <td className="py-1">{r.row.date.split('-').reverse().join('/')}</td>
                     <td className="py-1 text-right">{fmt(r.row.amount)}</td>
                     <td className="py-1 text-right">{r.lineAmount == null ? '—' : fmt(r.lineAmount)}</td>
+                    {showEstimates && (
+                      <td
+                        className={cn(
+                          'py-1 text-right',
+                          r.match?.estimate != null &&
+                            Math.abs(r.match.estimate - r.row.amount) >= 0.01 &&
+                            'text-amber-600'
+                        )}
+                        title="Precio unitario × pallets cargados en el viaje"
+                      >
+                        {r.match?.estimate == null ? '—' : fmt(r.match.estimate)}
+                      </td>
+                    )}
                     <td className="py-1 pl-2">
                       <Badge variant={r.state === 'ok' ? 'secondary' : 'destructive'} className="text-[10px]">
                         {stateLabel[r.state]}

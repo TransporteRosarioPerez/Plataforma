@@ -51,6 +51,8 @@ export type ArcorProformaGroup = {
   cortes: ArcorProformaCorte[]
   /** Suma de los TOTALES impresos (o de las filas si falta alguno). */
   total: number
+  /** Páginas del PDF (desde 1) que le corresponden, para guardar sólo esas. */
+  pages: number[]
 }
 
 export type ArcorProformaParse = {
@@ -100,6 +102,7 @@ export function parseArcorProforma(pages: string[][]): ArcorProformaParse {
         rows: [],
         cortes: [],
         total: 0,
+        pages: [],
       }
       groups.set(key, group)
     }
@@ -160,6 +163,9 @@ export function parseArcorProforma(pages: string[][]): ArcorProformaParse {
         corteTotals.set(key, ct)
       }
     }
+    // La hoja es de la proforma que quedó activa al leerla (las de continuación heredan)
+    const group = currentGroup()
+    if (group && !group.pages.includes(pageIndex + 1)) group.pages.push(pageIndex + 1)
   })
 
   for (const [key, ct] of corteTotals) {

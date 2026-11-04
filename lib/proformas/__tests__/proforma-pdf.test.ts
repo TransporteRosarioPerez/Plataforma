@@ -82,6 +82,8 @@ test('lee proforma, cortes, continuación y separa compañías', () => {
   assert.equal(arcor.total, 8573314.7)
   assert.equal(groups[1].total, 300000)
   assert.equal(groups[1].companyName, 'BAGLEY ARGENTINA S.A.')
+  assert.deepEqual(arcor.pages, [1, 2, 3])
+  assert.deepEqual(groups[1].pages, [4])
 })
 
 test('avisa si una fila aparece sin encabezado', () => {
@@ -148,4 +150,61 @@ test('marca un PDF cuyas filas no dan el TOTALES impreso', () => {
   const review = reviewProformaPdf(group, { '22400009': match('22400009') }, new Map([['t-22400009', 100]]))
   assert.equal(review.cortes[0].pdfInconsistent, true)
   assert.equal(review.ok, false)
+})
+
+// ---- Importar PDF (todas las proformas del PDF) ----
+import { assessPdfGroup, buildLinesFromPdf } from '@/lib/proformas/pdf-import'
+
+test('arma las líneas con el importe del PDF y marca ajustes', () => {
+  const group = parseArcorProforma(PAGES).groups[0]
+  const matches: Record<string, TripMatch | null> = {
+    '22400001': { ...match('22400001', 'adjustment'), otherProformas: ['181482-01-02'] },
+    '22400002': match('22400002', 'shared'),
+    '22400003': match('22400003'),
+    '4246863': match('4246863'),
+  }
+  const built = buildLinesFromPdf(group, matches)
+  assert.equal(built.tripIds.length, 4)
+  assert.equal(built.lines['t-22400001'].adjustment?.direction, 'up')
+  assert.match(built.lines['t-22400001'].adjustment?.reason ?? '', /181482-01-02/)
+  assert.equal(built.lines['t-4246863'].amount, '484.891,38')
+  assert.deepEqual(Array.from(built.sharedTripIds), ['t-22400002'])
+})
+
+test('estado de cada proforma del PDF: lista, con problemas o ya cargada', () => {
+  const [arcor, bagley] = parseArcorProforma(PAGES).groups
+  const all = Object.fromEntries(arcor.rows.map((r) => [r.code, match(r.code)]))
+
+  const ready = assessPdfGroup(arcor, { clientId: 'c1', existingProformaNumber: null, matches: all })
+  assert.equal(ready.status, 'ready', ready.problems.join('; '))
+  const items = JSON.parse(ready.lineItemsJson) as { amount: number }[]
+  assert.equal(Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100, arcor.total)
+
+  const noClient = assessPdfGroup(arcor, { clientId: null, existingProformaNumber: null, matches: all })
+  assert.equal(noClient.status, 'problems')
+  assert.match(noClient.problems[0], /CUIT/)
+
+  const missing = assessPdfGroup(arcor, {
+    clientId: 'c1',
+    existingProformaNumber: null,
+    matches: { ...all, '22400003': null },
+  })
+  assert.equal(missing.status, 'problems')
+
+  const existing = assessPdfGroup(bagley, {
+    clientId: 'c2',
+    existingProformaNumber: '183853-33-02',
+    matches: { '22400002': match('22400002') },
+  })
+  assert.equal(existing.status, 'existing')
+})
+
+test('avisa (sin bloquear) si el precio del PDF no es el cargado en el viaje', () => {
+  const group = parseArcorProforma(PAGES).groups[0]
+  const all = Object.fromEntries(group.rows.map((r) => [r.code, match(r.code)]))
+  all['4246863'] = { ...match('4246863'), estimate: 484981.38 }
+  all['22400001'] = { ...match('22400001'), estimate: 1000000 }
+  const a = assessPdfGroup(group, { clientId: 'c1', existingProformaNumber: null, matches: all })
+  assert.equal(a.status, 'ready')
+  assert.deepEqual(a.priceWarnings, [{ code: '4246863', pdf: 484891.38, expected: 484981.38, diff: -90 }])
 })

@@ -26,6 +26,8 @@ export type TripMatch = {
   kind: TripMatchKind
   /** Números de proforma donde ya figura el viaje. */
   otherProformas: string[]
+  /** Precio esperado del viaje en la plataforma (precio unitario × pallets), si está cargado. */
+  estimate?: number | null
 }
 
 export type PdfRowState = 'ok' | 'amount_diff' | 'missing_trip' | 'not_in_proforma' | 'not_billable'
