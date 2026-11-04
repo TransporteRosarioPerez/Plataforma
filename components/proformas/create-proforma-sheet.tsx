@@ -16,10 +16,13 @@ import { AddTripsDialog } from '@/components/proformas/add-trips-dialog'
 import { AddSharedTripDialog } from '@/components/proformas/add-shared-trip-dialog'
 import { AddAdjustmentTripsDialog } from '@/components/proformas/add-adjustment-trips-dialog'
 import { SelectedTripsEditor } from '@/components/proformas/selected-trips-editor'
+import { ProformaPdfCheck } from '@/components/proformas/proforma-pdf-check'
 import {
   buildAdjustmentLine,
   buildLineItemsJson,
   buildTripLineFromEstimate,
+  formatTripLineAmount,
+  signedTripLineAmount,
   sumTripLines,
   type TripBillingHistoryEntry,
   type TripLineAdjustment,
@@ -27,6 +30,15 @@ import {
 } from '@/lib/proformas/trip-estimate-amount'
 import type { SharedTripLookup } from '@/lib/actions/proformas'
 import { createProforma } from '@/lib/actions/proformas'
+import { matchProformaPdf } from '@/lib/actions/proforma-pdf'
+import {
+  looksLikeArcorProforma,
+  parseArcorProforma,
+  type ArcorProformaGroup,
+} from '@/lib/proformas/parse-arcor-pdf'
+import { reviewProformaPdf, type TripMatch } from '@/lib/proformas/pdf-review'
+import { roundCents } from '@/lib/pdf/numbers'
+import { readPdfLines } from '@/lib/pdf/read-pdf-lines'
 import { appendProformaFileToFormData } from '@/lib/documents/upload-proforma-file'
 import type { Client, Trip } from '@/lib/types'
 import { toast } from 'sonner'
@@ -77,6 +89,13 @@ export function CreateProformaSheet({
   const [notes, setNotes] = useState('')
   const [pdfFile, setPdfFile] = useState<File | null>(null)
 
+  // Lectura del PDF de Arcor: si se pudo leer, el PDF manda y hay que revisarlo antes de guardar
+  const [pdfReading, setPdfReading] = useState(false)
+  const [pdfGroups, setPdfGroups] = useState<ArcorProformaGroup[]>([])
+  const [pdfGroup, setPdfGroup] = useState<ArcorProformaGroup | null>(null)
+  const [pdfMatches, setPdfMatches] = useState<Record<string, TripMatch | null>>({})
+  const [pdfReviewed, setPdfReviewed] = useState(false)
+
   const [selectedTripIds, setSelectedTripIds] = useState<string[]>([])
   const [tripLines, setTripLines] = useState<Record<string, TripLineValues>>({})
   const [sharedTripIds, setSharedTripIds] = useState<Set<string>>(() => new Set())
@@ -91,9 +110,17 @@ export function CreateProformaSheet({
     setReceivedDate(todayIso())
     setNotes('')
     setPdfFile(null)
+    clearPdfImport()
     setSelectedTripIds([])
     setTripLines({})
     setSharedTripIds(new Set())
+  }
+
+  function clearPdfImport() {
+    setPdfGroups([])
+    setPdfGroup(null)
+    setPdfMatches({})
+    setPdfReviewed(false)
   }
 
   const handleOpenChange = (next: boolean) => {
@@ -113,6 +140,16 @@ export function CreateProformaSheet({
     () => buildLineItemsJson(selectedTripIds, tripLines),
     [selectedTripIds, tripLines]
   )
+
+  const pdfReview = useMemo(() => {
+    if (!pdfGroup) return null
+    const amounts = new Map(
+      selectedTripIds.map((id) => [id, roundCents(signedTripLineAmount(tripLines[id]))] as const)
+    )
+    return reviewProformaPdf(pdfGroup, pdfMatches, amounts)
+  }, [pdfGroup, pdfMatches, selectedTripIds, tripLines])
+
+  const pdfBlocksSave = !!pdfGroup && !(pdfReview?.ok && pdfReviewed)
 
   const canGoNext = !!clientId && !!proformaNumber.trim() && !!receivedDate
 
@@ -221,6 +258,101 @@ export function CreateProformaSheet({
       return
     }
     setPdfFile(file)
+    clearPdfImport()
+    void readProformaPdf(file)
+  }
+
+  const removePdf = () => {
+    setPdfFile(null)
+    clearPdfImport()
+  }
+
+  /** Lee el PDF en el navegador y, si es una proforma de Arcor, la arma sola. */
+  const readProformaPdf = async (file: File) => {
+    setPdfReading(true)
+    try {
+      const pages = await readPdfLines(file)
+      if (!looksLikeArcorProforma(pages)) {
+        toast.info('El PDF no tiene el formato de proforma de Arcor: elegí los viajes a mano.')
+        return
+      }
+      const parsed = parseArcorProforma(pages)
+      if (parsed.errors.length > 0) toast.warning(parsed.errors.slice(0, 3).join(' · '))
+      setPdfGroups(parsed.groups)
+      if (parsed.groups.length === 1) await applyPdfGroup(parsed.groups[0])
+    } catch {
+      toast.error('No se pudo leer el PDF. Podés cargar los viajes a mano.')
+    } finally {
+      setPdfReading(false)
+    }
+  }
+
+  /** Busca los viajes por número de carga y completa la proforma con los importes del PDF. */
+  const applyPdfGroup = async (group: ArcorProformaGroup) => {
+    setPdfReading(true)
+    try {
+      const res = await matchProformaPdf({
+        proformaNumber: group.proformaNumber,
+        cuit: group.cuit,
+        codes: group.rows.map((r) => r.code),
+      })
+      if (!res.ok) {
+        toast.error(res.error)
+        return
+      }
+      if (res.existingProformaNumber) {
+        toast.warning(`Ya existe la proforma ${res.existingProformaNumber}: revisá que no se esté cargando dos veces.`)
+      }
+
+      setPdfGroup(group)
+      setPdfMatches(res.matches)
+      setPdfReviewed(false)
+      setProformaNumber(group.proformaNumber)
+      const matchedClientId =
+        res.clientId ?? clients.find((c) => c.cuit?.replace(/\D/g, '') === group.cuit)?.id
+      if (matchedClientId) setClientId(matchedClientId)
+      if (group.issueDate) setReceivedDate(group.issueDate)
+
+      const byTrip = new Map<string, { amount: number; match: TripMatch }>()
+      for (const row of group.rows) {
+        const match = res.matches[row.code]
+        if (!match || match.kind === 'not_billable') continue
+        const prev = byTrip.get(match.tripId)
+        byTrip.set(match.tripId, { amount: roundCents((prev?.amount ?? 0) + row.amount), match })
+      }
+
+      const lines: Record<string, TripLineValues> = {}
+      const shared = new Set<string>()
+      for (const [tripId, { amount, match }] of byTrip) {
+        if (match.kind === 'adjustment') {
+          lines[tripId] = {
+            amount: formatTripLineAmount(Math.abs(amount)),
+            taxes: '0',
+            adjustment: {
+              direction: amount < 0 ? 'down' : 'up',
+              reason:
+                match.otherProformas.length > 0
+                  ? `Según PDF (ya estaba en ${match.otherProformas.join(', ')})`
+                  : 'Según PDF (facturado en el sistema anterior)',
+            },
+          }
+        } else {
+          lines[tripId] = { amount: formatTripLineAmount(amount), taxes: '0' }
+          if (match.kind === 'shared') shared.add(tripId)
+        }
+      }
+      setSelectedTripIds(Array.from(byTrip.keys()))
+      setTripLines(lines)
+      setSharedTripIds(shared)
+
+      const missing = group.rows.filter((r) => !res.matches[r.code]).length
+      toast.success(
+        `Se leyeron ${group.rows.length} viajes del PDF` +
+          (missing > 0 ? ` · ${missing} no existe${missing === 1 ? '' : 'n'} en la plataforma` : '')
+      )
+    } finally {
+      setPdfReading(false)
+    }
   }
 
   const handleCreate = async () => {
@@ -233,6 +365,10 @@ export function CreateProformaSheet({
       formData.set('proforma_number', proformaNumber.trim())
       formData.set('received_date', receivedDate)
       formData.set('line_items', lineItemsJson)
+      if (pdfGroup) {
+        formData.set('pdf_total', String(pdfGroup.total))
+        formData.set('pdf_proforma', pdfGroup.proformaNumber)
+      }
       if (notes.trim()) formData.set('notes', notes.trim())
 
       if (pdfFile) {
@@ -297,7 +433,7 @@ export function CreateProformaSheet({
                 <Button
                   type="button"
                   className="flex-1"
-                  disabled={!canGoNext || pending}
+                  disabled={!canGoNext || pending || pdfReading}
                   onClick={() => setStep(2)}
                 >
                   Siguiente
@@ -306,7 +442,7 @@ export function CreateProformaSheet({
                 <Button
                   type="button"
                   className="flex-1"
-                  disabled={pending || selectedTripIds.length === 0}
+                  disabled={pending || pdfReading || selectedTripIds.length === 0 || pdfBlocksSave}
                   onClick={handleCreate}
                 >
                   {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -372,8 +508,8 @@ export function CreateProformaSheet({
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 shrink-0"
-                      onClick={() => setPdfFile(null)}
-                      disabled={pending}
+                      onClick={removePdf}
+                      disabled={pending || pdfReading}
                     >
                       <X className="h-3.5 w-3.5" />
                     </Button>
@@ -382,7 +518,9 @@ export function CreateProformaSheet({
                   <label className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed px-4 py-5 text-center hover:bg-muted/30 transition-colors">
                     <Upload className="h-5 w-5 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">Tocá para subir el PDF recibido</span>
-                    <span className="text-xs text-muted-foreground">Opcional · solo PDF</span>
+                    <span className="text-xs text-muted-foreground">
+                      Si es una proforma de Arcor, se cargan solos los viajes y los importes
+                    </span>
                     <input
                       type="file"
                       accept="application/pdf"
@@ -393,6 +531,45 @@ export function CreateProformaSheet({
                   </label>
                 )}
               </Field>
+
+              {pdfReading && (
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Leyendo el PDF…
+                </p>
+              )}
+
+              {pdfGroups.length > 1 && (
+                <Field>
+                  <FieldLabel>El PDF trae {pdfGroups.length} proformas: ¿cuál cargás?</FieldLabel>
+                  <Select
+                    value={pdfGroup?.proformaNumber ?? ''}
+                    onValueChange={(v) => {
+                      const g = pdfGroups.find((x) => x.proformaNumber === v)
+                      if (g) void applyPdfGroup(g)
+                    }}
+                    disabled={pending || pdfReading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Elegir proforma del PDF" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {pdfGroups.map((g) => (
+                        <SelectItem key={g.proformaNumber} value={g.proformaNumber}>
+                          {g.proformaNumber} — {g.companyName} · {g.rows.length} viajes · {formatCurrency(g.total)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
+
+              {pdfGroup && !pdfReading && (
+                <p className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                  Leída del PDF: <span className="font-medium">{pdfGroup.proformaNumber}</span> ·{' '}
+                  {pdfGroup.rows.length} viajes · {formatCurrency(pdfGroup.total)}. En el paso siguiente
+                  revisás que coincida antes de guardar.
+                </p>
+              )}
 
               <Field>
                 <FieldLabel>Notas</FieldLabel>
@@ -406,6 +583,16 @@ export function CreateProformaSheet({
               </Field>
             </>
           ) : (
+            <>
+            {pdfGroup && pdfReview && (
+              <ProformaPdfCheck
+                proformaNumber={pdfGroup.proformaNumber}
+                review={pdfReview}
+                reviewed={pdfReviewed}
+                onReviewedChange={setPdfReviewed}
+                disabled={pending}
+              />
+            )}
             <SelectedTripsEditor
               trips={allTrips}
               selectedTripIds={selectedTripIds}
@@ -420,6 +607,7 @@ export function CreateProformaSheet({
               billingHistory={tripBillingHistory}
               disabled={pending}
             />
+            </>
           )}
         </div>
       </FormSheet>

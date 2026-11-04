@@ -8,7 +8,8 @@ import { parseForm, type ActionState } from '@/lib/validations/parse-form'
 import { createInvoiceSchema } from '@/lib/validations/invoices'
 import { AUDIT_ACTIONS } from '@/lib/audit/actions'
 import { logAudit } from '@/lib/audit/log'
-import { calculateInvoiceAmounts } from '@/lib/invoices/calculate'
+import { calculateInvoiceAmounts, invoiceIvaTolerance } from '@/lib/invoices/calculate'
+import { roundCents } from '@/lib/pdf/numbers'
 import { applyProformaLineItemsToTrips, loadProformaLineAmounts, resyncTripsBilling } from '@/lib/proformas/trip-billing-sync'
 
 function revalidateInvoicePaths(proformaId?: string, tripIds: string[] = []) {
@@ -59,7 +60,26 @@ export async function createInvoice(
   const neto = Number(proforma.subtotal)
   if (neto <= 0) return { error: 'La proforma no tiene importe neto' }
 
-  const amounts = calculateInvoiceAmounts(neto)
+  const estimated = calculateInvoiceAmounts(neto)
+  let amounts = estimated
+  const { pdf_neto, pdf_iva, pdf_total, pdf_lines } = parsed.data
+  const fromPdf = pdf_neto != null && pdf_iva != null && pdf_total != null
+  if (fromPdf) {
+    // La factura de ARCA manda: el neto tiene que ser el de la proforma al centavo,
+    // y el IVA puede diferir del recálculo sólo por el redondeo de cada línea.
+    if (roundCents(pdf_neto - estimated.subtotal) !== 0) {
+      return {
+        error: `El neto de la factura (${pdf_neto.toLocaleString('es-AR', { minimumFractionDigits: 2 })}) no coincide con el de la proforma (${estimated.subtotal.toLocaleString('es-AR', { minimumFractionDigits: 2 })})`,
+      }
+    }
+    if (Math.abs(pdf_iva - estimated.iva) > invoiceIvaTolerance(pdf_lines ?? 1)) {
+      return { error: 'El IVA de la factura no corresponde al 21% del neto. Revisá el PDF.' }
+    }
+    if (roundCents(pdf_neto + pdf_iva - pdf_total) !== 0) {
+      return { error: 'En el PDF, neto + IVA no da el total' }
+    }
+    amounts = { subtotal: roundCents(pdf_neto), iva: roundCents(pdf_iva), total: roundCents(pdf_total) }
+  }
   const tripIds: string[] = proforma.trip_ids ?? []
 
   const { data: client } = proforma.client_id
@@ -103,7 +123,7 @@ export async function createInvoice(
     entityId: insertedInvoice.id,
     entityLabel: parsed.data.invoice_number,
     summary: `Creó la factura ${parsed.data.invoice_number}`,
-    metadata: { proformaId: proforma.id },
+    metadata: { proformaId: proforma.id, amountsFromPdf: fromPdf },
   })
 
   revalidateInvoicePaths(proforma.id, tripIds)

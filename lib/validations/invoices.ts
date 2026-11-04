@@ -7,4 +7,9 @@ export const createInvoiceSchema = z.object({
   issue_date: z.string().min(1, 'Fecha requerida'),
   file_name: z.string().optional(),
   file_url: z.string().optional(),
+  /** Importes leídos del PDF de ARCA (mandan sobre el cálculo). */
+  pdf_neto: z.coerce.number().optional(),
+  pdf_iva: z.coerce.number().optional(),
+  pdf_total: z.coerce.number().optional(),
+  pdf_lines: z.coerce.number().int().min(0).optional(),
 })

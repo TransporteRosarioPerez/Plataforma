@@ -8,6 +8,9 @@ export const createProformaSchema = z.object({
   notes: z.string().optional(),
   file_name: z.string().optional(),
   file_url: z.string().optional(),
+  /** Si la proforma se armó desde el PDF de Arcor: total y número leídos del PDF. */
+  pdf_total: z.coerce.number().optional(),
+  pdf_proforma: z.string().optional(),
 })
 
 export const updateProformaSchema = z.object({

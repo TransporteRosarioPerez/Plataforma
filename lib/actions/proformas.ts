@@ -15,6 +15,7 @@ import {
   revertTripsAfterProformaRemoved,
 } from '@/lib/proformas/trip-billing-sync'
 import { calculateInvoiceAmounts } from '@/lib/invoices/calculate'
+import { roundCents } from '@/lib/pdf/numbers'
 
 type ParsedLineItem = {
   trip_id: string
@@ -225,13 +226,14 @@ async function validateTripsForProforma(
 }
 
 function sumLineItems(items: { amount: number; taxes: number }[]) {
-  return items.reduce(
+  const sums = items.reduce(
     (acc, item) => ({
       subtotal: acc.subtotal + item.amount,
       taxes: acc.taxes + item.taxes,
     }),
     { subtotal: 0, taxes: 0 }
   )
+  return { subtotal: roundCents(sums.subtotal), taxes: roundCents(sums.taxes) }
 }
 
 export async function createProforma(
@@ -288,6 +290,20 @@ export async function createProforma(
   const totals = sumLineItems(lineItems)
   const total = totals.subtotal
 
+  // Armada desde el PDF: el total tiene que dar exacto y el número ser el del PDF
+  const fromPdf = parsed.data.pdf_total != null && Number.isFinite(parsed.data.pdf_total)
+  if (fromPdf) {
+    const pdfTotal = roundCents(parsed.data.pdf_total as number)
+    if (roundCents(total - pdfTotal) !== 0) {
+      return {
+        error: `El total de la proforma no coincide con el PDF (diferencia ${roundCents(total - pdfTotal).toLocaleString('es-AR', { minimumFractionDigits: 2 })}). Revisá los importes.`,
+      }
+    }
+    if (parsed.data.pdf_proforma && parsed.data.pdf_proforma !== parsed.data.proforma_number) {
+      return { error: `El número de proforma no coincide con el del PDF (${parsed.data.pdf_proforma})` }
+    }
+  }
+
   const { data: proforma, error } = await supabase
     .from('proformas')
     .insert({
@@ -333,6 +349,9 @@ export async function createProforma(
       tripCount: tripIds.length,
       adjustmentCount: adjustments.length,
       clientName: client.name,
+      // Quien la creó tildó "Revisé que los viajes y el total coinciden con el PDF"
+      checkedAgainstPdf: fromPdf,
+      pdfTotal: fromPdf ? roundCents(parsed.data.pdf_total as number) : null,
     },
   })
 
@@ -373,7 +392,7 @@ export async function updateProforma(
   if (fetchError || !existing) return { error: 'Proforma no encontrada' }
 
   const previousTripIds: string[] = existing.trip_ids ?? []
-  let subtotal = parsed.data.subtotal
+  let subtotal = roundCents(parsed.data.subtotal)
   let syncedInvoice = false
   let nextTripIds = previousTripIds
   let newAdjustments: ParsedLineItem[] = []
@@ -458,20 +477,23 @@ export async function updateProforma(
 
     const { data: linkedInvoice } = await supabase
       .from('invoices')
-      .select('id')
+      .select('id, subtotal')
       .eq('proforma_id', parsed.data.id)
       .is('deleted_at', null)
       .maybeSingle()
 
     if (linkedInvoice) {
+      // Si el neto no cambió se conservan el IVA y el total de la factura (los de ARCA,
+      // que se redondean por línea). Sólo si cambia el neto se re-estima el IVA.
+      const netoChanged = roundCents(Number(linkedInvoice.subtotal) - subtotal) !== 0
       const amounts = calculateInvoiceAmounts(subtotal)
       const { error: invoiceError } = await supabase
         .from('invoices')
         .update({
-          subtotal: amounts.subtotal,
-          iva: amounts.iva,
-          total: amounts.total,
           trip_ids: nextTripIds,
+          ...(netoChanged
+            ? { subtotal: amounts.subtotal, iva: amounts.iva, total: amounts.total }
+            : {}),
         })
         .eq('id', linkedInvoice.id)
 
