@@ -26,6 +26,11 @@ export type ArcaInvoiceParse = {
   total: number | null
   /** Números de proforma mencionados en las líneas (183853…). */
   proformaRefs: string[]
+  /**
+   * Proformas completas según el detalle de Arcor ("Proforma 183853 … Compañía 01
+   * Jurisdiccion 02" → 183853-01-02), en el formato que usa la plataforma.
+   */
+  proformaNumbers: string[]
   lines: ArcaInvoiceLine[]
   errors: string[]
 }
@@ -87,7 +92,22 @@ export function parseArcaInvoice(pages: string[][]): ArcaInvoiceParse {
     itemLines.push({ description: m[1].trim(), subtotal, totalWithIva: withIva })
   }
 
-  const proformaRefs = Array.from(new Set(Array.from(text.matchAll(/Proforma\s+(\d{5,})/gi)).map((m) => m[1])))
+  // "Proforma 183853" (con mayúscula) es la proforma; "Corte de proforma 963037"
+  // (minúscula) es el corte y se ignora.
+  const proformaRefs: string[] = []
+  const proformaNumbers: string[] = []
+  let currentRef: string | null = null
+  const tokenRe = /\bProforma\s+(\d{5,})|[Cc]ompa[ñn][ií]a\s+(\d+)\s+[Jj]urisdicci[oó]n\s+(\d+)/g
+  for (const m of text.matchAll(tokenRe)) {
+    if (m[1]) {
+      currentRef = m[1]
+      if (!proformaRefs.includes(m[1])) proformaRefs.push(m[1])
+    } else if (currentRef && m[2] && m[3]) {
+      const pad = (v: string) => String(Number.parseInt(v, 10)).padStart(2, '0')
+      const number = `${currentRef}-${pad(m[2])}-${pad(m[3])}`
+      if (!proformaNumbers.includes(number)) proformaNumbers.push(number)
+    }
+  }
 
   if (isNote) errors.push('El PDF es una nota de crédito o débito, no una factura')
   if (!invoiceNumber) errors.push('No se encontró el punto de venta y número de comprobante')
@@ -107,6 +127,7 @@ export function parseArcaInvoice(pages: string[][]): ArcaInvoiceParse {
     iva,
     total,
     proformaRefs,
+    proformaNumbers,
     lines: itemLines,
     errors,
   }

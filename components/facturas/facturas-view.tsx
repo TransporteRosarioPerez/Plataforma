@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Search, Receipt, Download, Loader2, Trash2 } from 'lucide-react'
+import { Plus, Search, Receipt, Download, Loader2, Trash2, FileUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +15,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { CreateInvoiceSheet } from '@/components/facturas/create-invoice-sheet'
+import { ImportInvoicesPdfSheet } from '@/components/facturas/import-invoices-pdf-sheet'
 import { markInvoicePaid, deleteInvoice } from '@/lib/actions/invoices'
 import { generateInvoiceDownloadUrl } from '@/lib/actions/invoice-file'
 import type { Invoice, Proforma } from '@/lib/types'
@@ -51,6 +52,7 @@ export function FacturasView({ invoices, proformas, invoicedProformaIds }: Factu
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [toDelete, setToDelete] = useState<Invoice | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
@@ -120,13 +122,19 @@ export function FacturasView({ invoices, proformas, invoicedProformaIds }: Factu
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Facturas</h1>
           <p className="text-muted-foreground">
-            Una factura por proforma. El IVA 21% se calcula sobre el neto total. El cobro se registra acá.
+            Una factura por proforma, con el IVA que figura en el PDF de ARCA. El cobro se registra acá.
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva factura
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <FileUp className="mr-2 h-4 w-4" />
+            Importar PDFs
+          </Button>
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva factura
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -253,6 +261,8 @@ export function FacturasView({ invoices, proformas, invoicedProformaIds }: Factu
         onOpenChange={setCreateOpen}
         billableProformas={billableProformas}
       />
+
+      <ImportInvoicesPdfSheet open={importOpen} onOpenChange={setImportOpen} />
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>

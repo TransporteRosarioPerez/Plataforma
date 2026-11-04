@@ -37,7 +37,19 @@ Un viaje que aparece en dos proformas del mismo PDF (Arcor y Bagley) entra como 
 
 Sin PDF (u otro formato) la proforma se sigue cargando a mano como antes.
 
-## Factura (ARCA)
+## Importar varias facturas (Facturas → Importar PDFs)
+
+1. Se eligen varios PDFs de ARCA a la vez.
+2. Cada factura se vincula sola con su proforma:
+   - por el número que figura en el detalle ("Proforma 183853 … Compañía 01 Jurisdiccion 02" → `183853-01-02`);
+   - si el detalle no lo trae, por neto exacto + CUIT del cliente (si hay más de una, se elige a mano).
+3. Estado de cada una:
+   - **Para revisar**: neto igual al de la proforma al centavo, IVA dentro del redondeo, CUIT correcto.
+   - **Con problemas**: proforma no cargada o no pendiente, neto distinto, dos facturas con la misma proforma, etc.
+   - **Ya cargada**: el número de factura ya existe o la proforma ya tiene factura; se saltea.
+4. Se tilda "Revisé…" en cada una y **Guardar N revisadas** usa el mismo `createInvoice` (IVA y total de ARCA, PDF adjunto).
+
+## Factura de a una (ARCA)
 
 - Al subir el PDF de la factura se leen número (`00002-00000250`), tipo (por el código de comprobante), fecha, neto, IVA y total, y se elige sola la proforma con el mismo neto.
 - **Se guardan el IVA y el total impresos por ARCA.** ARCA redondea el IVA línea por línea, así que puede diferir en centavos de `neto × 21%` (caso real: 24.407.644,70 vs 24.407.644,71).
@@ -56,5 +68,6 @@ Sin PDF (u otro formato) la proforma se sigue cargando a mano como antes.
 | Importar PDF completo | `components/proformas/import-proformas-pdf-sheet.tsx`, `lib/proformas/pdf-import.ts` |
 | Cortar hojas del PDF | `lib/pdf/split-pages.ts` (dependencia `pdf-lib`) |
 | Lectura factura ARCA | `lib/invoices/parse-arca-pdf.ts` |
+| Importar varias facturas | `components/facturas/import-invoices-pdf-sheet.tsx`, `lib/invoices/pdf-import.ts`, `lib/actions/invoice-pdf.ts` |
 
 Tests: `pnpm test:facturacion` (datos ficticios con la estructura real).
